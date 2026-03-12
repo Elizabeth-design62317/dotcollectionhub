@@ -1,0 +1,1012 @@
+import { useState, useEffect, useCallback } from "react";
+
+// ─── SUPABASE CONFIG ──────────────────────────────────────────────────────────
+const SUPABASE_URL = "https://cgvqftcfsrzffuhhimds.supabase.co";
+const SUPABASE_ANON_KEY = "sb_publishable_vetn6UQlrIVVoUTUXi1Dgw_mKtPDWYG";
+
+const sb = {
+  headers: { "Content-Type": "application/json", "apikey": SUPABASE_ANON_KEY, "Authorization": `Bearer ${SUPABASE_ANON_KEY}` },
+  authHeaders: (token) => ({ "Content-Type": "application/json", "apikey": SUPABASE_ANON_KEY, "Authorization": `Bearer ${token}` }),
+  async signIn(email, password) {
+    const r = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`, { method: "POST", headers: this.headers, body: JSON.stringify({ email, password }) });
+    return r.json();
+  },
+  async signUp(email, password, fullName) {
+    const r = await fetch(`${SUPABASE_URL}/auth/v1/signup`, { method: "POST", headers: this.headers, body: JSON.stringify({ email, password, data: { full_name: fullName } }) });
+    return r.json();
+  },
+  async signOut(token) { await fetch(`${SUPABASE_URL}/auth/v1/logout`, { method: "POST", headers: this.authHeaders(token) }); },
+  async getProfile(userId, token) {
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/profiles?id=eq.${userId}&select=*`, { headers: this.authHeaders(token) });
+    const d = await r.json(); return Array.isArray(d) ? d[0] : null;
+  },
+  async query(table, token, filters = "", select = "*") {
+    const h = token ? this.authHeaders(token) : this.headers;
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/${table}?select=${select}${filters}`, { headers: { ...h, "Prefer": "return=representation" } });
+    return r.json();
+  },
+  async insert(table, token, data) {
+    const h = token ? this.authHeaders(token) : this.headers;
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/${table}`, { method: "POST", headers: { ...h, "Prefer": "return=representation" }, body: JSON.stringify(data) });
+    return r.json();
+  },
+  async patch(table, token, data, filters) {
+    const h = token ? this.authHeaders(token) : this.headers;
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/${table}?${filters}`, { method: "PATCH", headers: { ...h, "Prefer": "return=representation" }, body: JSON.stringify(data) });
+    return r.json();
+  },
+  async del(table, token, filters) {
+    const h = token ? this.authHeaders(token) : this.headers;
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/${table}?${filters}`, { method: "DELETE", headers: h });
+    return r.ok;
+  }
+};
+
+// ─── THEME ────────────────────────────────────────────────────────────────────
+const t = {
+  bg: "#0D0D0F", surface: "#16161A", surfaceHover: "#1E1E24",
+  border: "#2A2A35", borderLight: "#35354A",
+  accent: "#C9A96E", accentLight: "#D4B87A", accentDim: "rgba(201,169,110,0.15)",
+  text: "#F0EDE8", textMuted: "#8A8799", textDim: "#5A5869",
+  green: "#4CAF82", blue: "#5B8FD4", purple: "#9B72CF", red: "#E06868", yellow: "#E8C84A",
+};
+
+const G = `
+  @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400&family=DM+Sans:wght@300;400;500;600&display=swap');
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'DM Sans',sans-serif;background:${t.bg};color:${t.text};min-height:100vh}
+  ::-webkit-scrollbar{width:4px} ::-webkit-scrollbar-track{background:${t.bg}} ::-webkit-scrollbar-thumb{background:${t.border};border-radius:2px}
+  .dd{font-family:'Cormorant Garamond',serif}
+  .fi{animation:fi 0.4s ease forwards} @keyframes fi{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+  .card{background:${t.surface};border:1px solid ${t.border};border-radius:12px;transition:border-color 0.2s,box-shadow 0.2s}
+  .card:hover{border-color:${t.borderLight};box-shadow:0 4px 24px rgba(0,0,0,0.3)}
+  .bp{background:${t.accent};color:#0D0D0F;border:none;padding:10px 20px;border-radius:8px;font-family:'DM Sans',sans-serif;font-size:14px;font-weight:600;cursor:pointer;transition:background 0.2s,transform 0.1s;letter-spacing:0.02em}
+  .bp:hover{background:${t.accentLight};transform:translateY(-1px)} .bp:active{transform:translateY(0)} .bp:disabled{opacity:0.6;cursor:not-allowed}
+  .bg{background:transparent;color:${t.textMuted};border:1px solid ${t.border};padding:9px 18px;border-radius:8px;font-family:'DM Sans',sans-serif;font-size:14px;cursor:pointer;transition:all 0.2s}
+  .bg:hover{border-color:${t.accent};color:${t.accent}}
+  .tag{display:inline-block;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:500;letter-spacing:0.04em;text-transform:uppercase}
+  input,textarea,select{background:${t.bg};border:1px solid ${t.border};color:${t.text};border-radius:8px;padding:10px 14px;font-family:'DM Sans',sans-serif;font-size:14px;width:100%;outline:none;transition:border-color 0.2s}
+  input:focus,textarea:focus,select:focus{border-color:${t.accent}} textarea{resize:vertical;min-height:80px} select option{background:${t.surface}}
+  label{display:block;font-size:12px;font-weight:500;color:${t.textMuted};text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px}
+  .pb{height:4px;background:${t.border};border-radius:2px;overflow:hidden}
+  .pf{height:100%;background:linear-gradient(90deg,${t.accent},${t.accentLight});border-radius:2px;transition:width 0.6s ease}
+  .ni{display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:8px;cursor:pointer;color:${t.textMuted};font-size:13.5px;font-weight:400;transition:all 0.15s;border:1px solid transparent}
+  .ni:hover{background:${t.surfaceHover};color:${t.text}}
+  .ni.active{background:${t.accentDim};color:${t.accent};border-color:rgba(201,169,110,0.25);font-weight:500}
+  .sb{padding:4px 10px;border-radius:20px;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em}
+  .spin{animation:spin 1s linear infinite;display:inline-block} @keyframes spin{to{transform:rotate(360deg)}}
+`;
+
+const sc = (s) => ({
+  request_submitted:{bg:"rgba(91,143,212,0.15)",color:t.blue},
+  under_review:{bg:"rgba(155,114,207,0.15)",color:t.purple},
+  scheduled:{bg:"rgba(232,200,74,0.15)",color:t.yellow},
+  in_progress:{bg:"rgba(201,169,110,0.15)",color:t.accent},
+  waiting_on_agent:{bg:"rgba(224,104,104,0.15)",color:t.red},
+  completed:{bg:"rgba(76,175,130,0.15)",color:t.green},
+  delivered:{bg:"rgba(76,175,130,0.2)",color:t.green},
+}[s] || {bg:t.border,color:t.textMuted});
+
+const fs = (s) => s?.replace(/_/g," ").replace(/\b\w/g,c=>c.toUpperCase())||"";
+const Spin = () => <span className="spin" style={{fontSize:16,color:t.accent}}>◌</span>;
+const Empty = ({icon,title,sub,action}) => (
+  <div style={{textAlign:"center",padding:"60px 20px"}}>
+    <div style={{fontSize:40,marginBottom:12}}>{icon}</div>
+    <h3 style={{fontSize:16,fontWeight:600,marginBottom:6}}>{title}</h3>
+    <p style={{fontSize:13,color:t.textMuted,marginBottom:action?20:0}}>{sub}</p>
+    {action}
+  </div>
+);
+
+// ─── LOGIN ────────────────────────────────────────────────────────────────────
+const Login = ({onLogin}) => {
+  const [mode,setMode] = useState("login");
+  const [email,setEmail] = useState(""); const [pw,setPw] = useState(""); const [name,setName] = useState("");
+  const [err,setErr] = useState(""); const [loading,setLoading] = useState(false);
+
+  const doLogin = async () => {
+    if(!email||!pw){setErr("Please enter your email and password.");return;}
+    setLoading(true);setErr("");
+    try {
+      const d = await sb.signIn(email,pw);
+      if(d.error||d.error_description){setErr(d.error_description||d.error||"Login failed.");return;}
+      if(d.access_token){
+        const p = await sb.getProfile(d.user.id,d.access_token);
+        onLogin({...d.user,...p,token:d.access_token,name:p?.full_name||d.user.email});
+      }
+    } catch{setErr("Connection error. Please try again.");}
+    finally{setLoading(false);}
+  };
+
+  const doSignup = async () => {
+    if(!email||!pw||!name){setErr("Please fill in all fields.");return;}
+    setLoading(true);setErr("");
+    try {
+      const d = await sb.signUp(email,pw,name);
+      if(d.error){setErr(d.error.message||"Sign up failed.");return;}
+      if(d.access_token){
+        await new Promise(r=>setTimeout(r,800));
+        const p = await sb.getProfile(d.user.id,d.access_token);
+        onLogin({...d.user,...p,token:d.access_token,name});
+      } else {
+        setErr("Check your email to confirm your account, then sign in.");
+        setMode("login");
+      }
+    } catch{setErr("Connection error. Please try again.");}
+    finally{setLoading(false);}
+  };
+
+  return (
+    <div style={{minHeight:"100vh",background:t.bg,display:"flex",alignItems:"center",justifyContent:"center",padding:"20px"}}>
+      <style>{G}</style>
+      <div style={{width:"100%",maxWidth:420}}>
+        <div style={{textAlign:"center",marginBottom:48}}>
+          <div style={{display:"inline-flex",alignItems:"center",gap:10,marginBottom:12}}>
+            <div style={{width:40,height:40,borderRadius:"50%",background:t.accent,display:"flex",alignItems:"center",justifyContent:"center"}}>
+              <span style={{fontSize:18,color:"#0D0D0F",fontWeight:700}}>D</span>
+            </div>
+            <span className="dd" style={{fontSize:28,fontWeight:600,letterSpacing:"0.05em"}}>Dot Collection</span>
+          </div>
+          <p style={{color:t.textMuted,fontSize:14}}>Agent Resource Platform</p>
+        </div>
+        <div className="card" style={{padding:36}}>
+          <h2 className="dd" style={{fontSize:24,marginBottom:6}}>{mode==="login"?"Welcome back":"Create account"}</h2>
+          <p style={{color:t.textMuted,fontSize:13,marginBottom:28}}>{mode==="login"?"Sign in to access your resources":"Join the Dot Collection platform"}</p>
+          <div style={{display:"flex",flexDirection:"column",gap:14}}>
+            {mode==="signup"&&<div><label>Full Name</label><input value={name} onChange={e=>setName(e.target.value)} placeholder="Sarah Chen"/></div>}
+            <div><label>Email Address</label><input type="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder="you@dotcollection.com" onKeyDown={e=>e.key==="Enter"&&(mode==="login"?doLogin():doSignup())}/></div>
+            <div><label>Password</label><input type="password" value={pw} onChange={e=>setPw(e.target.value)} placeholder="••••••••" onKeyDown={e=>e.key==="Enter"&&(mode==="login"?doLogin():doSignup())}/></div>
+            {err&&<p style={{color:t.red,fontSize:13,padding:"10px 14px",background:"rgba(224,104,104,0.1)",borderRadius:8}}>{err}</p>}
+            <button className="bp" onClick={mode==="login"?doLogin:doSignup} disabled={loading} style={{marginTop:4,width:"100%",padding:"13px"}}>
+              {loading?<Spin/>:mode==="login"?"Sign In →":"Create Account →"}
+            </button>
+          </div>
+          <div style={{marginTop:20,textAlign:"center"}}>
+            <button onClick={()=>{setMode(mode==="login"?"signup":"login");setErr("");}} style={{background:"none",border:"none",cursor:"pointer",color:t.accent,fontSize:13}}>
+              {mode==="login"?"New agent? Create an account":"Already have an account? Sign in"}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ─── SIDEBAR ──────────────────────────────────────────────────────────────────
+const Sidebar = ({active,setActive,user,onLogout}) => {
+  const [exp,setExp] = useState({marketing:true,training:false});
+  const nav = [
+    {key:"dashboard",label:"Dashboard"},
+    {key:"marketing",label:"Marketing Hub",ch:[
+      {key:"marketing_weekly",label:"Weekly Drop"},
+      {key:"marketing_email",label:"Email Templates"},
+      {key:"marketing_social",label:"Social Templates"},
+      {key:"marketing_ideas",label:"Content Ideas"},
+    ]},
+    {key:"listing_services",label:"Listing Services"},
+    {key:"assets",label:"Asset Delivery"},
+    {key:"training",label:"Training Hub",ch:[
+      {key:"training_courses",label:"Courses"},
+      {key:"training_videos",label:"Video Library"},
+      {key:"training_resources",label:"Downloads"},
+    ]},
+    {key:"billing",label:"Membership"},
+    ...(user.role==="admin"?[{key:"admin",label:"Admin Panel"}]:[]),
+  ];
+  return (
+    <div style={{width:220,background:t.surface,borderRight:`1px solid ${t.border}`,height:"100vh",display:"flex",flexDirection:"column",position:"fixed",left:0,top:0,zIndex:100}}>
+      <div style={{padding:"24px 20px 20px",borderBottom:`1px solid ${t.border}`}}>
+        <div style={{display:"flex",alignItems:"center",gap:10}}>
+          <div style={{width:32,height:32,borderRadius:"50%",background:t.accent,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+            <span style={{fontSize:14,color:"#0D0D0F",fontWeight:700}}>D</span>
+          </div>
+          <div>
+            <div className="dd" style={{fontSize:16,fontWeight:600,letterSpacing:"0.04em",lineHeight:1.2}}>Dot Collection</div>
+            <div style={{fontSize:10,color:t.textDim,textTransform:"uppercase",letterSpacing:"0.08em"}}>Agent Platform</div>
+          </div>
+        </div>
+      </div>
+      <div style={{flex:1,overflowY:"auto",padding:"12px 10px"}}>
+        {nav.map(item=>(
+          <div key={item.key}>
+            <div className={`ni ${active===item.key||item.ch?.some(c=>c.key===active)?"active":""}`}
+              onClick={()=>item.ch?setExp(e=>({...e,[item.key]:!e[item.key]})):setActive(item.key)}
+              style={{justifyContent:"space-between"}}>
+              <span>{item.label}</span>
+              {item.ch&&<span style={{fontSize:10,color:t.textDim}}>{exp[item.key]?"▲":"▼"}</span>}
+            </div>
+            {item.ch&&exp[item.key]&&(
+              <div style={{marginLeft:14,marginBottom:4}}>
+                {item.ch.map(c=>(
+                  <div key={c.key} className={`ni ${active===c.key?"active":""}`} onClick={()=>setActive(c.key)} style={{fontSize:13,padding:"8px 12px"}}>
+                    <span style={{color:t.textDim,fontSize:10}}>—</span> {c.label}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+      <div style={{padding:"14px 10px",borderTop:`1px solid ${t.border}`}}>
+        <div style={{padding:"10px 12px",borderRadius:8,background:t.bg,marginBottom:8}}>
+          <div style={{fontSize:13,fontWeight:500}}>{user.name||user.email}</div>
+          <div style={{display:"flex",gap:6,marginTop:4,flexWrap:"wrap"}}>
+            <span className="tag" style={{background:t.accentDim,color:t.accent}}>{user.tier||"basic"}</span>
+            <span className="tag" style={{background:"rgba(91,143,212,0.15)",color:t.blue}}>{user.role||"agent"}</span>
+          </div>
+        </div>
+        <div className="ni" onClick={onLogout} style={{fontSize:13}}>Sign Out →</div>
+      </div>
+    </div>
+  );
+};
+
+// ─── DASHBOARD ────────────────────────────────────────────────────────────────
+const Dashboard = ({user,setActive}) => {
+  const [stats,setStats] = useState({templates:0,requests:0,courses:0});
+  const [loading,setLoading] = useState(true);
+  useEffect(()=>{
+    (async()=>{
+      try{
+        const [tpl,req,crs] = await Promise.all([
+          sb.query("templates",user.token,"&is_published=eq.true"),
+          sb.query("listing_requests",user.token,`&agent_id=eq.${user.id}`),
+          sb.query("courses",user.token,"&is_published=eq.true"),
+        ]);
+        setStats({
+          templates:Array.isArray(tpl)?tpl.length:0,
+          requests:Array.isArray(req)?req.filter(r=>!["completed","delivered"].includes(r.status)).length:0,
+          courses:Array.isArray(crs)?crs.length:0,
+        });
+      }catch{}
+      setLoading(false);
+    })();
+  },[user]);
+
+  const blocks = [
+    {title:"This Week's Market Drop",sub:"Ready-to-use market content",cta:"Download Now",to:"marketing_weekly",accent:t.accent,icon:"📊"},
+    {title:"Email Templates",sub:"Branded, plug-and-play templates",cta:"Browse Templates",to:"marketing_email",accent:t.blue,icon:"✉️"},
+    {title:"Listing Services",sub:"Request photography, marketing & more",cta:"Submit Request",to:"listing_services",accent:t.green,icon:"🏡"},
+    {title:"Training Hub",sub:"Courses, videos, and coaching replays",cta:"Start Learning",to:"training_courses",accent:t.purple,icon:"🎓"},
+  ];
+
+  return (
+    <div className="fi">
+      <div style={{marginBottom:32}}>
+        <h1 className="dd" style={{fontSize:36,fontWeight:600,marginBottom:6}}>Good morning, {(user.name||user.email)?.split(" ")[0]}.</h1>
+        <p style={{color:t.textMuted,fontSize:15}}>Here's what's available for you today.</p>
+      </div>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:12,marginBottom:28}}>
+        {[
+          {label:"Published Templates",val:loading?"—":stats.templates},
+          {label:"Active Requests",val:loading?"—":stats.requests},
+          {label:"Available Courses",val:loading?"—":stats.courses},
+          {label:"Membership",val:(user.tier||"basic").charAt(0).toUpperCase()+(user.tier||"basic").slice(1)},
+        ].map((s,i)=>(
+          <div key={i} className="card" style={{padding:"18px 20px"}}>
+            <div style={{fontSize:11,color:t.textDim,textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:8}}>{s.label}</div>
+            <div className="dd" style={{fontSize:28,fontWeight:500}}>{s.val}</div>
+          </div>
+        ))}
+      </div>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:16}}>
+        {blocks.map((b,i)=>(
+          <div key={i} className="card" style={{padding:24}}>
+            <div style={{fontSize:28,marginBottom:10}}>{b.icon}</div>
+            <h3 style={{fontSize:16,fontWeight:600,marginBottom:6}}>{b.title}</h3>
+            <p style={{fontSize:13,color:t.textMuted,marginBottom:16}}>{b.sub}</p>
+            <button className="bg" onClick={()=>setActive(b.to)} style={{fontSize:13,borderColor:`${b.accent}50`,color:b.accent}}>{b.cta} →</button>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+// ─── WEEKLY DROP ──────────────────────────────────────────────────────────────
+const WeeklyDrop = ({user}) => {
+  const [drop,setDrop] = useState(null); const [ideas,setIdeas] = useState([]); const [loading,setLoading] = useState(true);
+  useEffect(()=>{
+    (async()=>{
+      const drops = await sb.query("weekly_drops",user.token,"&is_published=eq.true&order=created_at.desc&limit=1");
+      if(Array.isArray(drops)&&drops.length>0){
+        setDrop(drops[0]);
+        const di = await sb.query("content_ideas",user.token,`&weekly_drop_id=eq.${drops[0].id}`);
+        if(Array.isArray(di))setIdeas(di);
+      }
+      setLoading(false);
+    })();
+  },[user]);
+
+  if(loading)return <div style={{padding:40,textAlign:"center"}}><Spin/></div>;
+  if(!drop)return(
+    <div className="fi">
+      <h1 className="dd" style={{fontSize:32,marginBottom:20}}>Weekly Market Drop</h1>
+      <Empty icon="📊" title="No drop published yet" sub="The Dot team will publish this week's market drop soon."/>
+    </div>
+  );
+  return(
+    <div className="fi">
+      <div style={{marginBottom:28}}>
+        <span className="tag" style={{background:t.accentDim,color:t.accent,marginBottom:10,display:"inline-block"}}>New Drop</span>
+        <h1 className="dd" style={{fontSize:32,marginBottom:6}}>Weekly Market Drop</h1>
+        <p style={{color:t.textMuted}}>{drop.week_label}{drop.theme&&<> · Theme: <strong style={{color:t.text}}>{drop.theme}</strong></>}</p>
+      </div>
+      {(drop.median_price||drop.inventory_change||drop.days_on_market||drop.list_to_sale)&&(
+        <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:12,marginBottom:24}}>
+          {[["Median Sale Price",drop.median_price],["Inventory Change",drop.inventory_change],["Avg Days on Market",drop.days_on_market],["List-to-Sale Ratio",drop.list_to_sale]].filter(([,v])=>v).map(([l,v])=>(
+            <div key={l} className="card" style={{padding:"18px 20px",textAlign:"center"}}>
+              <div style={{fontSize:11,color:t.textDim,textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:8}}>{l}</div>
+              <div className="dd" style={{fontSize:26,color:t.accent}}>{v}</div>
+            </div>
+          ))}
+        </div>
+      )}
+      <div className="card" style={{padding:28,marginBottom:20,border:`1px solid rgba(201,169,110,0.3)`}}>
+        <h3 style={{fontSize:18,fontWeight:600,marginBottom:6}}>This Week's Download Package</h3>
+        <p style={{color:t.textMuted,fontSize:14,marginBottom:20}}>Ready to plug into your email and social — no design work required.</p>
+        {drop.package_url
+          ?<a href={drop.package_url} target="_blank" rel="noreferrer"><button className="bp">↓ Download Full Package</button></a>
+          :<button className="bg" disabled style={{cursor:"not-allowed"}}>Package uploading soon...</button>}
+      </div>
+      {ideas.length>0&&(
+        <div className="card" style={{padding:24}}>
+          <h3 style={{fontSize:16,fontWeight:600,marginBottom:16}}>Content Ideas for This Week</h3>
+          <div style={{display:"flex",flexDirection:"column",gap:10}}>
+            {ideas.map((idea,i)=>(
+              <div key={i} style={{padding:"14px 16px",background:t.bg,borderRadius:8,border:`1px solid ${t.border}`,display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:12}}>
+                <div>
+                  <span className="tag" style={{background:t.accentDim,color:t.accent,marginBottom:6,display:"inline-block"}}>{idea.type}</span>
+                  <p style={{fontSize:14,lineHeight:1.5}}>{idea.idea}</p>
+                </div>
+                {idea.difficulty&&<span className="tag" style={{background:idea.difficulty==="easy"?"rgba(76,175,130,0.12)":"rgba(232,200,74,0.12)",color:idea.difficulty==="easy"?t.green:t.yellow,flexShrink:0}}>{idea.difficulty}</span>}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ─── TEMPLATE LIBRARY ─────────────────────────────────────────────────────────
+const TemplateLib = ({type,user}) => {
+  const [templates,setTemplates] = useState([]); const [loading,setLoading] = useState(true);
+  const [search,setSearch] = useState(""); const [cat,setCat] = useState("all");
+  const [favs,setFavs] = useState([]); const [dl,setDl] = useState([]);
+
+  useEffect(()=>{
+    (async()=>{
+      const data = await sb.query("templates",user.token,`&type=eq.${type}&is_published=eq.true`);
+      if(Array.isArray(data))setTemplates(data);
+      const f = await sb.query("favorites",user.token,`&user_id=eq.${user.id}&item_type=eq.template`);
+      if(Array.isArray(f))setFavs(f.map(x=>x.item_id));
+      setLoading(false);
+    })();
+  },[type,user]);
+
+  const toggleFav = async(id) => {
+    if(favs.includes(id)){
+      await sb.del("favorites",user.token,`user_id=eq.${user.id}&item_type=eq.template&item_id=eq.${id}`);
+      setFavs(f=>f.filter(x=>x!==id));
+    } else {
+      await sb.insert("favorites",user.token,{user_id:user.id,item_type:"template",item_id:id});
+      setFavs(f=>[...f,id]);
+    }
+  };
+
+  const handleDl = async(tpl) => {
+    await sb.patch("templates",user.token,{downloads:(tpl.downloads||0)+1},`id=eq.${tpl.id}`);
+    setDl(d=>[...d,tpl.id]);
+    setTemplates(ts=>ts.map(x=>x.id===tpl.id?{...x,downloads:(x.downloads||0)+1}:x));
+    if(tpl.file_url)window.open(tpl.file_url,"_blank");
+  };
+
+  const cats = ["all",...new Set(templates.map(x=>x.category).filter(Boolean))];
+  const filtered = templates.filter(x=>(cat==="all"||x.category===cat)&&(search===""||x.title.toLowerCase().includes(search.toLowerCase())));
+
+  if(loading)return <div style={{padding:40,textAlign:"center"}}><Spin/></div>;
+  return(
+    <div className="fi">
+      <div style={{marginBottom:28}}>
+        <h1 className="dd" style={{fontSize:32,marginBottom:6}}>{type==="email"?"Email":"Social Media"} Templates</h1>
+        <p style={{color:t.textMuted}}>Branded, plug-and-play templates ready to personalize.</p>
+      </div>
+      <div style={{display:"flex",gap:10,marginBottom:20,flexWrap:"wrap",alignItems:"center"}}>
+        <div style={{flex:"1",minWidth:200,maxWidth:300}}>
+          <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search templates..."/>
+        </div>
+        <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+          {cats.map(c=>(
+            <button key={c} onClick={()=>setCat(c)} style={{padding:"7px 14px",borderRadius:20,border:"none",cursor:"pointer",fontSize:12,fontWeight:500,textTransform:"capitalize",background:cat===c?t.accent:t.surface,color:cat===c?"#0D0D0F":t.textMuted,transition:"all 0.15s"}}>{c}</button>
+          ))}
+        </div>
+      </div>
+      {filtered.length===0
+        ?<Empty icon="📄" title="No templates found" sub="Try a different search or check back later."/>
+        :<div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(280px,1fr))",gap:14}}>
+          {filtered.map(tpl=>(
+            <div key={tpl.id} className="card" style={{padding:20}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:10}}>
+                <span className="tag" style={{background:t.accentDim,color:t.accent}}>{tpl.category}</span>
+                <button onClick={()=>toggleFav(tpl.id)} style={{background:"none",border:"none",cursor:"pointer",fontSize:16,color:favs.includes(tpl.id)?t.accent:t.textDim}}>★</button>
+              </div>
+              <h3 style={{fontSize:15,fontWeight:600,marginBottom:8}}>{tpl.title}</h3>
+              {tpl.preview_text&&<p style={{fontSize:12.5,color:t.textMuted,lineHeight:1.6,marginBottom:12,fontStyle:"italic"}}>"{tpl.preview_text}"</p>}
+              {type==="social"&&tpl.platform&&<div style={{fontSize:11,color:t.textDim,marginBottom:10}}>Platform: <span style={{color:t.blue}}>{tpl.platform}</span></div>}
+              <div style={{fontSize:11,color:t.textDim,marginBottom:14}}>{tpl.downloads||0} downloads</div>
+              <button className="bp" onClick={()=>handleDl(tpl)} style={{fontSize:12,padding:"7px 14px",width:"100%"}}>
+                {dl.includes(tpl.id)?"✓ Downloaded":"↓ Download"}
+              </button>
+            </div>
+          ))}
+        </div>
+      }
+    </div>
+  );
+};
+
+// ─── CONTENT IDEAS ────────────────────────────────────────────────────────────
+const ContentIdeas = ({user}) => {
+  const [ideas,setIdeas] = useState([]); const [loading,setLoading] = useState(true); const [filter,setFilter] = useState("all");
+  useEffect(()=>{
+    (async()=>{
+      const drops = await sb.query("weekly_drops",user.token,"&is_published=eq.true&order=created_at.desc&limit=1");
+      if(Array.isArray(drops)&&drops.length>0){
+        const d = await sb.query("content_ideas",user.token,`&weekly_drop_id=eq.${drops[0].id}`);
+        if(Array.isArray(d))setIdeas(d);
+      }
+      setLoading(false);
+    })();
+  },[user]);
+  const cats = ["all",...new Set(ideas.map(i=>i.category).filter(Boolean))];
+  const filtered = filter==="all"?ideas:ideas.filter(i=>i.category===filter);
+  if(loading)return <div style={{padding:40,textAlign:"center"}}><Spin/></div>;
+  return(
+    <div className="fi">
+      <div style={{marginBottom:28}}>
+        <h1 className="dd" style={{fontSize:32,marginBottom:6}}>Content Ideas</h1>
+        <p style={{color:t.textMuted}}>Fresh ideas every week. Just pick one and post.</p>
+      </div>
+      {cats.length>1&&<div style={{display:"flex",gap:6,marginBottom:20,flexWrap:"wrap"}}>
+        {cats.map(c=><button key={c} onClick={()=>setFilter(c)} style={{padding:"7px 14px",borderRadius:20,border:"none",cursor:"pointer",fontSize:12,fontWeight:500,textTransform:"capitalize",background:filter===c?t.accent:t.surface,color:filter===c?"#0D0D0F":t.textMuted,transition:"all 0.15s"}}>{c}</button>)}
+      </div>}
+      {filtered.length===0
+        ?<Empty icon="💡" title="No content ideas yet" sub="The Dot team will add ideas with each weekly drop."/>
+        :<div style={{display:"flex",flexDirection:"column",gap:10}}>
+          {filtered.map((idea,i)=>(
+            <div key={i} className="card" style={{padding:"16px 20px",display:"flex",justifyContent:"space-between",alignItems:"center",gap:16}}>
+              <div style={{flex:1}}>
+                <div style={{display:"flex",gap:8,marginBottom:6}}>
+                  <span className="tag" style={{background:t.accentDim,color:t.accent}}>{idea.type}</span>
+                  {idea.category&&<span className="tag" style={{background:"rgba(91,143,212,0.12)",color:t.blue}}>{idea.category}</span>}
+                </div>
+                <p style={{fontSize:14,lineHeight:1.5}}>{idea.idea}</p>
+              </div>
+              {idea.difficulty&&<span className="tag" style={{background:idea.difficulty==="easy"?"rgba(76,175,130,0.12)":"rgba(232,200,74,0.12)",color:idea.difficulty==="easy"?t.green:t.yellow,flexShrink:0}}>{idea.difficulty}</span>}
+            </div>
+          ))}
+        </div>
+      }
+    </div>
+  );
+};
+
+// ─── LISTING SERVICES ─────────────────────────────────────────────────────────
+const ListingServices = ({user}) => {
+  const [reqs,setReqs] = useState([]); const [loading,setLoading] = useState(true);
+  const [showForm,setShowForm] = useState(false);
+  const [form,setForm] = useState({address:"",price:"",launch:"",services:[],notes:""});
+  const [submitting,setSubmitting] = useState(false); const [ok,setOk] = useState(false);
+
+  const load = useCallback(async()=>{
+    const filter = user.role==="admin"?"":` &agent_id=eq.${user.id}`;
+    const d = await sb.query("listing_requests",user.token,`${filter}&order=created_at.desc`);
+    if(Array.isArray(d))setReqs(d);
+    setLoading(false);
+  },[user]);
+
+  useEffect(()=>{load();},[load]);
+
+  const svcs = ["Photography","Videography","Drone","Floor Plans","Beauty Sheet","Brochure","Social Media Launch Assets","Property Website","Email Blast","Coming Soon Package","Full Launch Package"];
+
+  const submit = async()=>{
+    if(!form.address||!form.services.length)return;
+    setSubmitting(true);
+    const d = await sb.insert("listing_requests",user.token,{
+      agent_id:user.id,property_address:form.address,list_price:form.price,
+      target_launch_date:form.launch||null,services_requested:form.services,notes:form.notes,status:"request_submitted"
+    });
+    if(Array.isArray(d)&&d[0]){setReqs(r=>[d[0],...r]);setForm({address:"",price:"",launch:"",services:[],notes:""});setShowForm(false);setOk(true);setTimeout(()=>setOk(false),4000);}
+    setSubmitting(false);
+  };
+
+  const updStatus = async(id,status)=>{
+    await sb.patch("listing_requests",user.token,{status},`id=eq.${id}`);
+    setReqs(rs=>rs.map(r=>r.id===id?{...r,status}:r));
+  };
+
+  if(loading)return <div style={{padding:40,textAlign:"center"}}><Spin/></div>;
+  return(
+    <div className="fi">
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:28}}>
+        <div>
+          <h1 className="dd" style={{fontSize:32,marginBottom:6}}>Listing Services</h1>
+          <p style={{color:t.textMuted}}>Request photography, marketing assets, and launch packages.</p>
+        </div>
+        <button className="bp" onClick={()=>setShowForm(!showForm)}>+ New Request</button>
+      </div>
+      {ok&&<div style={{padding:"14px 18px",background:"rgba(76,175,130,0.12)",border:`1px solid ${t.green}40`,borderRadius:10,marginBottom:20,color:t.green,fontSize:14}}>✓ Request submitted! You'll receive status updates here.</div>}
+      {showForm&&(
+        <div className="card" style={{padding:28,marginBottom:24,border:`1px solid rgba(201,169,110,0.3)`}}>
+          <h3 style={{fontSize:18,fontWeight:600,marginBottom:20}}>New Listing Request</h3>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16,marginBottom:16}}>
+            <div><label>Property Address *</label><input placeholder="142 Maple St, Boston MA" value={form.address} onChange={e=>setForm(f=>({...f,address:e.target.value}))}/></div>
+            <div><label>List Price</label><input placeholder="$595,000" value={form.price} onChange={e=>setForm(f=>({...f,price:e.target.value}))}/></div>
+            <div><label>Target Launch Date</label><input type="date" value={form.launch} onChange={e=>setForm(f=>({...f,launch:e.target.value}))}/></div>
+          </div>
+          <div style={{marginBottom:16}}>
+            <label>Services Requested *</label>
+            <div style={{display:"flex",flexWrap:"wrap",gap:8,marginTop:6}}>
+              {svcs.map(s=>(
+                <button key={s} onClick={()=>setForm(f=>({...f,services:f.services.includes(s)?f.services.filter(x=>x!==s):[...f.services,s]}))}
+                  style={{padding:"7px 12px",borderRadius:20,border:`1px solid ${form.services.includes(s)?t.accent:t.border}`,background:form.services.includes(s)?t.accentDim:"transparent",color:form.services.includes(s)?t.accent:t.textMuted,cursor:"pointer",fontSize:12,transition:"all 0.15s",fontFamily:"inherit"}}>{s}</button>
+              ))}
+            </div>
+          </div>
+          <div style={{marginBottom:20}}><label>Notes</label><textarea placeholder="Staging status, access info, special requests..." value={form.notes} onChange={e=>setForm(f=>({...f,notes:e.target.value}))}/></div>
+          <div style={{display:"flex",gap:10}}>
+            <button className="bp" onClick={submit} disabled={submitting}>{submitting?<Spin/>:"Submit Request →"}</button>
+            <button className="bg" onClick={()=>setShowForm(false)}>Cancel</button>
+          </div>
+        </div>
+      )}
+      {reqs.length===0
+        ?<Empty icon="🏡" title="No requests yet" sub="Submit your first listing service request above." action={<button className="bp" onClick={()=>setShowForm(true)}>+ New Request</button>}/>
+        :<div style={{display:"flex",flexDirection:"column",gap:12}}>
+          {reqs.map(req=>{
+            const s = sc(req.status);
+            return(
+              <div key={req.id} className="card" style={{padding:"20px 24px"}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
+                  <div style={{flex:1}}>
+                    <h3 style={{fontSize:15,fontWeight:600,marginBottom:6}}>{req.property_address}</h3>
+                    <div style={{display:"flex",gap:12,flexWrap:"wrap"}}>
+                      {req.services_requested?.length>0&&<span style={{fontSize:12.5,color:t.textMuted}}>{req.services_requested.join(", ")}</span>}
+                      {req.list_price&&<span style={{fontSize:12.5,color:t.textMuted}}>List: {req.list_price}</span>}
+                      <span style={{fontSize:12.5,color:t.textDim}}>{new Date(req.created_at).toLocaleDateString()}</span>
+                    </div>
+                  </div>
+                  <div style={{display:"flex",gap:10,alignItems:"center",flexShrink:0}}>
+                    <span className="sb" style={{background:s.bg,color:s.color}}>{fs(req.status)}</span>
+                    {user.role==="admin"&&(
+                      <select value={req.status} onChange={e=>updStatus(req.id,e.target.value)} style={{width:"auto",fontSize:12,padding:"4px 8px"}}>
+                        {["request_submitted","under_review","scheduled","in_progress","waiting_on_agent","completed","delivered"].map(x=><option key={x} value={x}>{fs(x)}</option>)}
+                      </select>
+                    )}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      }
+    </div>
+  );
+};
+
+// ─── ASSET DELIVERY ───────────────────────────────────────────────────────────
+const AssetDelivery = ({user}) => {
+  const [reqs,setReqs] = useState([]); const [idx,setIdx] = useState(0);
+  const [assets,setAssets] = useState([]); const [loading,setLoading] = useState(true);
+  const [upName,setUpName] = useState(""); const [uploading,setUploading] = useState(false);
+
+  useEffect(()=>{
+    (async()=>{
+      const filter = user.role==="admin"?"":` &agent_id=eq.${user.id}`;
+      const r = await sb.query("listing_requests",user.token,`${filter}&order=created_at.desc`);
+      if(Array.isArray(r)&&r.length>0){
+        setReqs(r);
+        const a = await sb.query("assets",user.token,`&request_id=eq.${r[0].id}&order=created_at.desc`);
+        if(Array.isArray(a))setAssets(a);
+      }
+      setLoading(false);
+    })();
+  },[user]);
+
+  const loadAssets = async(rid)=>{
+    const a = await sb.query("assets",user.token,`&request_id=eq.${rid}&order=created_at.desc`);
+    if(Array.isArray(a))setAssets(a);
+  };
+
+  const upload = async()=>{
+    if(!upName||!reqs[idx])return;
+    setUploading(true);
+    const d = await sb.insert("assets",user.token,{
+      request_id:reqs[idx].id,uploaded_by:user.id,
+      direction:user.role==="admin"?"team_to_agent":"agent_to_team",
+      file_name:upName,file_url:"#",file_type:"Upload",
+    });
+    if(Array.isArray(d)&&d[0])setAssets(a=>[d[0],...a]);
+    setUpName(""); setUploading(false);
+  };
+
+  if(loading)return <div style={{padding:40,textAlign:"center"}}><Spin/></div>;
+  return(
+    <div className="fi">
+      <div style={{marginBottom:28}}>
+        <h1 className="dd" style={{fontSize:32,marginBottom:6}}>Asset Delivery</h1>
+        <p style={{color:t.textMuted}}>Upload listing files or download completed assets from the Dot team.</p>
+      </div>
+      {reqs.length===0
+        ?<Empty icon="⬡" title="No listings yet" sub="Submit a listing service request first to manage assets."/>
+        :<div style={{display:"grid",gridTemplateColumns:"220px 1fr",gap:20}}>
+          <div style={{display:"flex",flexDirection:"column",gap:8}}>
+            {reqs.map((r,i)=>{const s=sc(r.status);return(
+              <div key={r.id} onClick={()=>{setIdx(i);loadAssets(r.id);}} className="card" style={{padding:"14px 16px",cursor:"pointer",border:idx===i?`1px solid ${t.accent}`:undefined,background:idx===i?t.accentDim:t.surface}}>
+                <div style={{fontSize:13,fontWeight:500,marginBottom:6}}>{r.property_address?.split(",")[0]}</div>
+                <span className="sb" style={{background:s.bg,color:s.color,fontSize:10}}>{fs(r.status)}</span>
+              </div>
+            );})}
+          </div>
+          <div className="card" style={{padding:24}}>
+            <h3 style={{fontSize:16,fontWeight:600,marginBottom:4}}>{reqs[idx]?.property_address}</h3>
+            <p style={{fontSize:13,color:t.textMuted,marginBottom:20}}>All files for this listing.</p>
+            {assets.length===0
+              ?<Empty icon="📁" title="No files yet" sub="Upload a file below or wait for the Dot team to deliver assets."/>
+              :<div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:20}}>
+                {assets.map((f,i)=>(
+                  <div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"12px 14px",background:t.bg,borderRadius:8,border:`1px solid ${t.border}`}}>
+                    <div style={{display:"flex",gap:12,alignItems:"center"}}>
+                      <span style={{fontSize:20}}>{f.direction==="team_to_agent"?"📦":"📄"}</span>
+                      <div>
+                        <div style={{fontSize:13.5,fontWeight:500}}>{f.file_name}</div>
+                        <div style={{fontSize:11,color:t.textDim}}>{f.file_type} · {new Date(f.created_at).toLocaleDateString()}</div>
+                      </div>
+                    </div>
+                    <div style={{display:"flex",gap:8,alignItems:"center"}}>
+                      <span className="tag" style={{background:f.direction==="team_to_agent"?"rgba(76,175,130,0.12)":"rgba(91,143,212,0.12)",color:f.direction==="team_to_agent"?t.green:t.blue}}>{f.direction==="team_to_agent"?"From Dot":"From You"}</span>
+                      {f.direction==="team_to_agent"&&f.file_url!=="#"&&<a href={f.file_url} target="_blank" rel="noreferrer"><button className="bg" style={{fontSize:11,padding:"5px 10px"}}>↓ Download</button></a>}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            }
+            <div style={{padding:"18px 20px",background:t.bg,borderRadius:10,border:`1px dashed ${t.borderLight}`}}>
+              <p style={{fontSize:13,fontWeight:500,marginBottom:12}}>↑ Upload a file to this listing</p>
+              <div style={{display:"flex",gap:10}}>
+                <input placeholder="File name or description..." value={upName} onChange={e=>setUpName(e.target.value)} onKeyDown={e=>e.key==="Enter"&&upload()}/>
+                <button className="bp" onClick={upload} disabled={uploading} style={{whiteSpace:"nowrap"}}>{uploading?<Spin/>:"Upload"}</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      }
+    </div>
+  );
+};
+
+// ─── TRAINING / VIDEOS / RESOURCES ───────────────────────────────────────────
+const Courses = ({user}) => {
+  const [courses,setCourses] = useState([]); const [loading,setLoading] = useState(true);
+  useEffect(()=>{
+    (async()=>{
+      const d = await sb.query("courses",user.token,"&is_published=eq.true&order=sort_order.asc");
+      if(Array.isArray(d))setCourses(d); setLoading(false);
+    })();
+  },[user]);
+  if(loading)return <div style={{padding:40,textAlign:"center"}}><Spin/></div>;
+  return(
+    <div className="fi">
+      <div style={{marginBottom:28}}><h1 className="dd" style={{fontSize:32,marginBottom:6}}>Courses</h1><p style={{color:t.textMuted}}>Structured learning to build your business and brand.</p></div>
+      {courses.length===0
+        ?<Empty icon="🎓" title="No courses yet" sub="The Dot team is building courses for you. Check back soon!"/>
+        :<div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(280px,1fr))",gap:16}}>
+          {courses.map(c=>(
+            <div key={c.id} className="card" style={{padding:22}}>
+              <div style={{fontSize:36,marginBottom:14}}>{c.thumbnail_emoji||"📚"}</div>
+              {c.category&&<span className="tag" style={{background:t.accentDim,color:t.accent,marginBottom:10,display:"inline-block"}}>{c.category}</span>}
+              <h3 style={{fontSize:16,fontWeight:600,marginBottom:6}}>{c.title}</h3>
+              {c.description&&<p style={{fontSize:13,color:t.textMuted,marginBottom:10,lineHeight:1.5}}>{c.description}</p>}
+              <p style={{fontSize:12,color:t.textDim,marginBottom:16}}>{c.total_lessons} lessons · {c.duration_label}</p>
+              <button className="bp" style={{width:"100%",fontSize:13}}>Start Course →</button>
+            </div>
+          ))}
+        </div>
+      }
+    </div>
+  );
+};
+
+const Videos = ({user}) => {
+  const [vids,setVids] = useState([]); const [loading,setLoading] = useState(true); const [search,setSearch] = useState("");
+  useEffect(()=>{
+    (async()=>{
+      const d = await sb.query("videos",user.token,"&is_published=eq.true&order=created_at.desc");
+      if(Array.isArray(d))setVids(d); setLoading(false);
+    })();
+  },[user]);
+  const filtered = vids.filter(v=>v.title.toLowerCase().includes(search.toLowerCase()));
+  if(loading)return <div style={{padding:40,textAlign:"center"}}><Spin/></div>;
+  return(
+    <div className="fi">
+      <div style={{marginBottom:28}}><h1 className="dd" style={{fontSize:32,marginBottom:6}}>Video Library</h1><p style={{color:t.textMuted}}>Training videos, coaching replays, and marketing examples.</p></div>
+      <div style={{maxWidth:360,marginBottom:20}}><input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search videos..."/></div>
+      {filtered.length===0
+        ?<Empty icon="▶" title="No videos yet" sub="The Dot team will upload training videos here."/>
+        :<div style={{display:"flex",flexDirection:"column",gap:10}}>
+          {filtered.map(v=>(
+            <div key={v.id} className="card" style={{padding:"16px 20px",display:"flex",alignItems:"center",gap:16}}>
+              <div style={{width:48,height:48,background:t.accentDim,borderRadius:8,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                <span style={{color:t.accent,fontSize:18}}>▶</span>
+              </div>
+              <div style={{flex:1}}>
+                <h3 style={{fontSize:14.5,fontWeight:500,marginBottom:4}}>{v.title}</h3>
+                <div style={{display:"flex",gap:10}}>
+                  {v.category&&<span className="tag" style={{background:t.border,color:t.textMuted}}>{v.category}</span>}
+                  {v.duration_label&&<span style={{fontSize:12,color:t.textDim}}>{v.duration_label}</span>}
+                  <span style={{fontSize:12,color:t.textDim}}>{v.views} views</span>
+                </div>
+              </div>
+              {v.video_url
+                ?<a href={v.video_url} target="_blank" rel="noreferrer"><button className="bg" style={{fontSize:12}}>Watch</button></a>
+                :<button className="bg" style={{fontSize:12}}>Watch</button>
+              }
+            </div>
+          ))}
+        </div>
+      }
+    </div>
+  );
+};
+
+const Resources = ({user}) => {
+  const [res,setRes] = useState([]); const [loading,setLoading] = useState(true);
+  useEffect(()=>{
+    (async()=>{
+      const d = await sb.query("resource_downloads",user.token,"&is_published=eq.true&order=created_at.desc");
+      if(Array.isArray(d))setRes(d); setLoading(false);
+    })();
+  },[user]);
+  if(loading)return <div style={{padding:40,textAlign:"center"}}><Spin/></div>;
+  return(
+    <div className="fi">
+      <div style={{marginBottom:28}}><h1 className="dd" style={{fontSize:32,marginBottom:6}}>Resource Downloads</h1><p style={{color:t.textMuted}}>Worksheets, checklists, scripts, and SOPs.</p></div>
+      {res.length===0
+        ?<Empty icon="📄" title="No resources yet" sub="Downloadable resources will appear here."/>
+        :<div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(260px,1fr))",gap:14}}>
+          {res.map(r=>(
+            <div key={r.id} className="card" style={{padding:20}}>
+              <div style={{fontSize:28,marginBottom:12}}>📄</div>
+              {r.type&&<span className="tag" style={{background:t.border,color:t.textMuted,marginBottom:8,display:"inline-block"}}>{r.type}</span>}
+              <h3 style={{fontSize:14.5,fontWeight:500,marginBottom:14}}>{r.title}</h3>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                <span style={{fontSize:11,color:t.textDim}}>{r.format}</span>
+                {r.file_url
+                  ?<a href={r.file_url} target="_blank" rel="noreferrer"><button className="bg" style={{fontSize:11,padding:"5px 10px"}}>↓ Download</button></a>
+                  :<button className="bg" style={{fontSize:11,padding:"5px 10px"}}>↓ Download</button>
+                }
+              </div>
+            </div>
+          ))}
+        </div>
+      }
+    </div>
+  );
+};
+
+// ─── BILLING ──────────────────────────────────────────────────────────────────
+const Billing = ({user}) => {
+  const tiers = [
+    {id:"basic",name:"Basic",price:"$49/mo",features:["Marketing Hub access","Email templates","Social templates","Weekly content ideas","Weekly market drop"]},
+    {id:"pro",name:"Pro",price:"$99/mo",features:["Everything in Basic","Listing Services portal","Asset delivery portal","Video library","Premium templates","Resource downloads"]},
+    {id:"premium",name:"Collective",price:"$179/mo",features:["Everything in Pro","Full course library","Coaching call replays","Priority service requests","Service discounts"]},
+  ];
+  const cur = user.tier||"basic";
+  return(
+    <div className="fi">
+      <div style={{marginBottom:28}}>
+        <h1 className="dd" style={{fontSize:32,marginBottom:6}}>Membership</h1>
+        <p style={{color:t.textMuted}}>You're on the <strong style={{color:t.accent}}>{cur.charAt(0).toUpperCase()+cur.slice(1)}</strong> plan.</p>
+      </div>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:16,marginBottom:28}}>
+        {tiers.map(tier=>(
+          <div key={tier.id} className="card" style={{padding:28,position:"relative",border:tier.id==="pro"?`1px solid ${t.accent}`:tier.id===cur?`1px solid ${t.green}`:undefined}}>
+            {tier.id==="pro"&&<div style={{position:"absolute",top:-12,left:"50%",transform:"translateX(-50%)",background:t.accent,color:"#0D0D0F",fontSize:11,fontWeight:700,padding:"4px 14px",borderRadius:20}}>MOST POPULAR</div>}
+            {tier.id===cur&&<div style={{position:"absolute",top:-12,right:20,background:t.green,color:"#0D0D0F",fontSize:11,fontWeight:700,padding:"4px 12px",borderRadius:20}}>CURRENT</div>}
+            <h3 className="dd" style={{fontSize:22,fontWeight:600,marginBottom:4}}>{tier.name}</h3>
+            <div style={{fontSize:26,fontWeight:700,color:t.accent,marginBottom:20}}>{tier.price}</div>
+            <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:24}}>
+              {tier.features.map((f,i)=><div key={i} style={{display:"flex",gap:8}}><span style={{color:t.green,fontSize:12,marginTop:2}}>✓</span><span style={{fontSize:13,color:t.textMuted}}>{f}</span></div>)}
+            </div>
+            <button className={tier.id===cur?"bg":"bp"} style={{width:"100%"}}>{tier.id===cur?"Current Plan":"Upgrade →"}</button>
+          </div>
+        ))}
+      </div>
+      <div className="card" style={{padding:22}}>
+        <h3 style={{fontSize:15,fontWeight:600,marginBottom:14}}>Account Details</h3>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
+          {[["Name",user.name||"—"],["Email",user.email],["Role",user.role||"agent"],["Member Since",user.joined_at?new Date(user.joined_at).toLocaleDateString():"—"]].map(([k,v])=>(
+            <div key={k}>
+              <div style={{fontSize:11,color:t.textDim,textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:4}}>{k}</div>
+              <div style={{fontSize:14.5}}>{v}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ─── ADMIN PANEL ──────────────────────────────────────────────────────────────
+const Admin = ({user}) => {
+  const [tab,setTab] = useState("overview");
+  const [users,setUsers] = useState([]); const [stats,setStats] = useState({});
+  const [loading,setLoading] = useState(true);
+  const [tpl,setTpl] = useState({title:"",type:"email",category:"",preview_text:"",file_url:""});
+  const [drop,setDrop] = useState({week_label:"",theme:"",median_price:"",inventory_change:"",days_on_market:"",list_to_sale:""});
+  const [vid,setVid] = useState({title:"",category:"",video_url:"",duration_label:""});
+  const [saving,setSaving] = useState(false); const [msg,setMsg] = useState("");
+
+  useEffect(()=>{
+    (async()=>{
+      const [p,tpls,reqs,crs] = await Promise.all([
+        sb.query("profiles",user.token,""),
+        sb.query("templates",user.token,""),
+        sb.query("listing_requests",user.token,""),
+        sb.query("courses",user.token,""),
+      ]);
+      if(Array.isArray(p))setUsers(p);
+      setStats({
+        members:Array.isArray(p)?p.length:0,
+        templates:Array.isArray(tpls)?tpls.length:0,
+        requests:Array.isArray(reqs)?reqs.filter(r=>!["completed","delivered"].includes(r.status)).length:0,
+        courses:Array.isArray(crs)?crs.length:0,
+      });
+      setLoading(false);
+    })();
+  },[user]);
+
+  const save = async(fn,reset,successMsg)=>{
+    setSaving(true); await fn(); setMsg(successMsg); reset(); setTimeout(()=>setMsg(""),3000); setSaving(false);
+  };
+
+  const updUser = async(uid,field,val)=>{
+    await sb.patch("profiles",user.token,{[field]:val},`id=eq.${uid}`);
+    setUsers(us=>us.map(u=>u.id===uid?{...u,[field]:val}:u));
+  };
+
+  if(loading)return <div style={{padding:40,textAlign:"center"}}><Spin/></div>;
+  return(
+    <div className="fi">
+      <div style={{marginBottom:24}}><h1 className="dd" style={{fontSize:32,marginBottom:6}}>Admin Panel</h1><p style={{color:t.textMuted}}>Manage members, content, and requests.</p></div>
+      <div style={{display:"flex",gap:4,marginBottom:24,background:t.surface,borderRadius:10,padding:4,width:"fit-content",border:`1px solid ${t.border}`}}>
+        {["overview","members","templates","weekly drop","videos"].map(x=>(
+          <button key={x} onClick={()=>setTab(x)} style={{padding:"8px 16px",borderRadius:7,border:"none",cursor:"pointer",fontSize:12,fontWeight:500,textTransform:"capitalize",background:tab===x?t.accent:"transparent",color:tab===x?"#0D0D0F":t.textMuted,fontFamily:"inherit",transition:"all 0.15s"}}>{x}</button>
+        ))}
+      </div>
+      {msg&&<div style={{padding:"12px 16px",background:"rgba(76,175,130,0.12)",border:`1px solid ${t.green}40`,borderRadius:8,marginBottom:16,color:t.green,fontSize:13}}>{msg}</div>}
+
+      {tab==="overview"&&(
+        <div>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:12,marginBottom:24}}>
+            {[["Total Members",stats.members,t.accent],["Active Requests",stats.requests,t.blue],["Templates",stats.templates,t.purple],["Courses",stats.courses,t.green]].map(([l,v,c])=>(
+              <div key={l} className="card" style={{padding:"20px 22px"}}>
+                <div style={{fontSize:11,color:t.textDim,textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:8}}>{l}</div>
+                <div className="dd" style={{fontSize:32,color:c}}>{v}</div>
+              </div>
+            ))}
+          </div>
+          <div className="card" style={{padding:22}}>
+            <h3 style={{fontSize:15,fontWeight:600,marginBottom:14}}>Quick Actions</h3>
+            <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
+              {["templates","weekly drop","videos"].map(x=><button key={x} className="bg" onClick={()=>setTab(x)} style={{textTransform:"capitalize",fontSize:13}}>+ Add {x}</button>)}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {tab==="members"&&(
+        <div className="card" style={{padding:22}}>
+          <h3 style={{fontSize:15,fontWeight:600,marginBottom:18}}>All Members ({users.length})</h3>
+          <div style={{display:"flex",flexDirection:"column",gap:4}}>
+            {users.map(u=>(
+              <div key={u.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"12px 14px",borderRadius:8,background:t.bg}}>
+                <div>
+                  <span style={{fontSize:14,fontWeight:500}}>{u.full_name||"—"}</span>
+                  <span style={{fontSize:12,color:t.textDim,marginLeft:10}}>{u.email}</span>
+                </div>
+                <div style={{display:"flex",gap:8}}>
+                  <select value={u.tier||"basic"} onChange={e=>updUser(u.id,"tier",e.target.value)} style={{width:"auto",fontSize:12,padding:"4px 8px"}}>
+                    <option value="basic">Basic</option><option value="pro">Pro</option><option value="premium">Premium</option>
+                  </select>
+                  <select value={u.role||"agent"} onChange={e=>updUser(u.id,"role",e.target.value)} style={{width:"auto",fontSize:12,padding:"4px 8px"}}>
+                    <option value="agent">Agent</option><option value="admin">Admin</option><option value="creative_team">Creative Team</option>
+                  </select>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {tab==="templates"&&(
+        <div className="card" style={{padding:28}}>
+          <h3 style={{fontSize:16,fontWeight:600,marginBottom:20}}>Publish New Template</h3>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14,marginBottom:14}}>
+            <div><label>Title *</label><input value={tpl.title} onChange={e=>setTpl(f=>({...f,title:e.target.value}))} placeholder="Just Listed Announcement"/></div>
+            <div><label>Type</label><select value={tpl.type} onChange={e=>setTpl(f=>({...f,type:e.target.value}))}><option value="email">Email</option><option value="social">Social</option></select></div>
+            <div><label>Category</label><input value={tpl.category} onChange={e=>setTpl(f=>({...f,category:e.target.value}))} placeholder="listing, market, events..."/></div>
+            <div><label>File URL</label><input value={tpl.file_url} onChange={e=>setTpl(f=>({...f,file_url:e.target.value}))} placeholder="https://..."/></div>
+          </div>
+          <div style={{marginBottom:18}}><label>Preview Text</label><textarea value={tpl.preview_text} onChange={e=>setTpl(f=>({...f,preview_text:e.target.value}))} placeholder="Short preview..."/></div>
+          <button className="bp" onClick={()=>save(()=>sb.insert("templates",user.token,{...tpl,is_published:true}),()=>setTpl({title:"",type:"email",category:"",preview_text:"",file_url:""}),"✓ Template published!")} disabled={saving||!tpl.title}>{saving?<Spin/>:"Publish Template →"}</button>
+        </div>
+      )}
+
+      {tab==="weekly drop"&&(
+        <div className="card" style={{padding:28}}>
+          <h3 style={{fontSize:16,fontWeight:600,marginBottom:20}}>Publish Weekly Drop</h3>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14,marginBottom:18}}>
+            <div><label>Week Label *</label><input value={drop.week_label} onChange={e=>setDrop(f=>({...f,week_label:e.target.value}))} placeholder="Week of March 18, 2025"/></div>
+            <div><label>Theme</label><input value={drop.theme} onChange={e=>setDrop(f=>({...f,theme:e.target.value}))} placeholder="Spring Market Momentum"/></div>
+            <div><label>Median Price</label><input value={drop.median_price} onChange={e=>setDrop(f=>({...f,median_price:e.target.value}))} placeholder="$649,000"/></div>
+            <div><label>Inventory Change</label><input value={drop.inventory_change} onChange={e=>setDrop(f=>({...f,inventory_change:e.target.value}))} placeholder="↓ 12%"/></div>
+            <div><label>Days on Market</label><input value={drop.days_on_market} onChange={e=>setDrop(f=>({...f,days_on_market:e.target.value}))} placeholder="21 days"/></div>
+            <div><label>List-to-Sale Ratio</label><input value={drop.list_to_sale} onChange={e=>setDrop(f=>({...f,list_to_sale:e.target.value}))} placeholder="103%"/></div>
+          </div>
+          <button className="bp" onClick={()=>save(()=>sb.insert("weekly_drops",user.token,{...drop,is_published:true}),()=>setDrop({week_label:"",theme:"",median_price:"",inventory_change:"",days_on_market:"",list_to_sale:""}),"✓ Weekly drop published!")} disabled={saving||!drop.week_label}>{saving?<Spin/>:"Publish Drop →"}</button>
+        </div>
+      )}
+
+      {tab==="videos"&&(
+        <div className="card" style={{padding:28}}>
+          <h3 style={{fontSize:16,fontWeight:600,marginBottom:20}}>Publish New Video</h3>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14,marginBottom:18}}>
+            <div><label>Title *</label><input value={vid.title} onChange={e=>setVid(f=>({...f,title:e.target.value}))} placeholder="Listing Presentation Script"/></div>
+            <div><label>Category</label><input value={vid.category} onChange={e=>setVid(f=>({...f,category:e.target.value}))} placeholder="coaching, scripts, platform..."/></div>
+            <div><label>Video URL</label><input value={vid.video_url} onChange={e=>setVid(f=>({...f,video_url:e.target.value}))} placeholder="https://vimeo.com/..."/></div>
+            <div><label>Duration</label><input value={vid.duration_label} onChange={e=>setVid(f=>({...f,duration_label:e.target.value}))} placeholder="14:20"/></div>
+          </div>
+          <button className="bp" onClick={()=>save(()=>sb.insert("videos",user.token,{...vid,is_published:true}),()=>setVid({title:"",category:"",video_url:"",duration_label:""}),"✓ Video published!")} disabled={saving||!vid.title}>{saving?<Spin/>:"Publish Video →"}</button>
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ─── APP ──────────────────────────────────────────────────────────────────────
+export default function App() {
+  const [user,setUser] = useState(null);
+  const [active,setActive] = useState("dashboard");
+
+  if(!user)return <Login onLogin={setUser}/>;
+
+  const render = () => {
+    switch(active){
+      case "dashboard": return <Dashboard user={user} setActive={setActive}/>;
+      case "marketing_weekly": return <WeeklyDrop user={user}/>;
+      case "marketing_email": return <TemplateLib type="email" user={user}/>;
+      case "marketing_social": return <TemplateLib type="social" user={user}/>;
+      case "marketing_ideas": return <ContentIdeas user={user}/>;
+      case "listing_services": return <ListingServices user={user}/>;
+      case "assets": return <AssetDelivery user={user}/>;
+      case "training": case "training_courses": return <Courses user={user}/>;
+      case "training_videos": return <Videos user={user}/>;
+      case "training_resources": return <Resources user={user}/>;
+      case "billing": return <Billing user={user}/>;
+      case "admin": return user.role==="admin"?<Admin user={user}/>:<Dashboard user={user} setActive={setActive}/>;
+      default: return <Dashboard user={user} setActive={setActive}/>;
+    }
+  };
+
+  return(
+    <div style={{display:"flex",minHeight:"100vh",background:t.bg}}>
+      <style>{G}</style>
+      <Sidebar active={active} setActive={setActive} user={user} onLogout={async()=>{await sb.signOut(user.token);setUser(null);}}/>
+      <main style={{marginLeft:220,flex:1,padding:"36px 40px",overflowY:"auto",maxWidth:"calc(100vw - 220px)"}}>
+        {render()}
+      </main>
+    </div>
+  );
+}
