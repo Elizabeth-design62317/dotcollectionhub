@@ -180,6 +180,7 @@ const Sidebar = ({active,setActive,user,onLogout}) => {
     {key:"marketing",label:"Marketing Hub",ch:[
       {key:"marketing_weekly",label:"Weekly Drop"},
       {key:"marketing_email",label:"Email Templates"},
+      {key:"marketing_print",label:"Print Materials"},
       {key:"marketing_social",label:"Social Templates"},
       {key:"marketing_ideas",label:"Content Ideas"},
     ]},
@@ -374,10 +375,11 @@ const TemplateLib = ({type,user}) => {
   const [templates,setTemplates] = useState([]); const [loading,setLoading] = useState(true);
   const [search,setSearch] = useState(""); const [cat,setCat] = useState("all");
   const [favs,setFavs] = useState([]); const [dl,setDl] = useState([]);
+  const [preview,setPreview] = useState(null);
 
   useEffect(()=>{
     (async()=>{
-      const data = await sb.query("templates",user.token,`&type=eq.${type}&is_published=eq.true`);
+      const data = await sb.query("templates",user.token,`&type=eq.${type}&is_published=eq.true&order=category.asc,title.asc`);
       if(Array.isArray(data))setTemplates(data);
       const f = await sb.query("favorites",user.token,`&user_id=eq.${user.id}&item_type=eq.template`);
       if(Array.isArray(f))setFavs(f.map(x=>x.item_id));
@@ -399,6 +401,7 @@ const TemplateLib = ({type,user}) => {
     await sb.patch("templates",user.token,{downloads:(tpl.downloads||0)+1},`id=eq.${tpl.id}`);
     setDl(d=>[...d,tpl.id]);
     setTemplates(ts=>ts.map(x=>x.id===tpl.id?{...x,downloads:(x.downloads||0)+1}:x));
+    if(preview)setPreview(p=>({...p,downloads:(p.downloads||0)+1}));
     if(tpl.file_url)window.open(tpl.file_url,"_blank");
   };
 
@@ -409,8 +412,8 @@ const TemplateLib = ({type,user}) => {
   return(
     <div className="fi">
       <div style={{marginBottom:28}}>
-        <h1 className="dd" style={{fontSize:32,marginBottom:6}}>{type==="email"?"Email":"Social Media"} Templates</h1>
-        <p style={{color:t.textMuted}}>Branded, plug-and-play templates ready to personalize.</p>
+        <h1 className="dd" style={{fontSize:32,marginBottom:6}}>{type==="email"?"Email":type==="print"?"Print Materials":"Social Media"} Templates</h1>
+        <p style={{color:t.textMuted}}>{type==="print"?"Postcards, booklets, beauty sheets, and print-ready files.":"Branded, plug-and-play templates ready to personalize."}</p>
       </div>
       <div style={{display:"flex",gap:10,marginBottom:20,flexWrap:"wrap",alignItems:"center"}}>
         <div style={{flex:"1",minWidth:200,maxWidth:300}}>
@@ -426,22 +429,74 @@ const TemplateLib = ({type,user}) => {
         ?<Empty icon="📄" title="No templates found" sub="Try a different search or check back later."/>
         :<div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(280px,1fr))",gap:14}}>
           {filtered.map(tpl=>(
-            <div key={tpl.id} className="card" style={{padding:20}}>
+            <div key={tpl.id} className="card" style={{padding:20,cursor:"pointer",transition:"transform 0.15s,border-color 0.15s"}}
+              onMouseEnter={e=>e.currentTarget.style.transform="translateY(-2px)"}
+              onMouseLeave={e=>e.currentTarget.style.transform="translateY(0)"}
+            >
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:10}}>
                 <span className="tag" style={{background:t.accentDim,color:t.accent}}>{tpl.category}</span>
-                <button onClick={()=>toggleFav(tpl.id)} style={{background:"none",border:"none",cursor:"pointer",fontSize:16,color:favs.includes(tpl.id)?t.accent:t.textDim}}>★</button>
+                <button onClick={e=>{e.stopPropagation();toggleFav(tpl.id);}} style={{background:"none",border:"none",cursor:"pointer",fontSize:16,color:favs.includes(tpl.id)?t.accent:t.textDim}}>★</button>
               </div>
               <h3 style={{fontSize:15,fontWeight:600,marginBottom:8}}>{tpl.title}</h3>
               {tpl.preview_text&&<p style={{fontSize:12.5,color:t.textMuted,lineHeight:1.6,marginBottom:12,fontStyle:"italic"}}>"{tpl.preview_text}"</p>}
               {type==="social"&&tpl.platform&&<div style={{fontSize:11,color:t.textDim,marginBottom:10}}>Platform: <span style={{color:t.blue}}>{tpl.platform}</span></div>}
               <div style={{fontSize:11,color:t.textDim,marginBottom:14}}>{tpl.downloads||0} downloads</div>
-              <button className="bp" onClick={()=>handleDl(tpl)} style={{fontSize:12,padding:"7px 14px",width:"100%"}}>
-                {dl.includes(tpl.id)?"✓ Downloaded":"↓ Download"}
-              </button>
+              <div style={{display:"flex",gap:8}}>
+                <button className="bg" onClick={()=>setPreview(tpl)} style={{fontSize:12,padding:"7px 14px",flex:1}}>👁 Preview</button>
+                <button className="bp" onClick={()=>handleDl(tpl)} style={{fontSize:12,padding:"7px 14px",flex:1}}>
+                  {dl.includes(tpl.id)?"✓ Got it":"↓ Download"}
+                </button>
+              </div>
             </div>
           ))}
         </div>
       }
+
+      {/* PREVIEW MODAL */}
+      {preview&&(
+        <div onClick={()=>setPreview(null)} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.75)",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+          <div onClick={e=>e.stopPropagation()} style={{background:t.surface,borderRadius:16,border:`1px solid ${t.border}`,width:"100%",maxWidth:600,maxHeight:"85vh",overflow:"auto",padding:36,position:"relative"}}>
+            <button onClick={()=>setPreview(null)} style={{position:"absolute",top:16,right:16,background:"none",border:"none",cursor:"pointer",fontSize:20,color:t.textMuted,lineHeight:1}}>✕</button>
+            
+            <div style={{display:"flex",gap:10,alignItems:"center",marginBottom:6}}>
+              <span className="tag" style={{background:t.accentDim,color:t.accent}}>{preview.category}</span>
+              {preview.type&&<span className="tag" style={{background:"rgba(91,143,212,0.12)",color:t.blue,textTransform:"capitalize"}}>{preview.type}</span>}
+            </div>
+            <h2 className="dd" style={{fontSize:24,marginBottom:20}}>{preview.title}</h2>
+
+            {/* Preview body */}
+            <div style={{background:t.bg,borderRadius:12,padding:24,marginBottom:20,border:`1px solid ${t.border}`}}>
+              <div style={{fontSize:11,color:t.textDim,textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:12}}>Template Preview</div>
+              {preview.preview_text
+                ? <p style={{fontSize:14,lineHeight:1.8,color:t.text,fontStyle:"italic",whiteSpace:"pre-wrap"}}>"{preview.preview_text}"</p>
+                : <p style={{fontSize:13,color:t.textMuted,fontStyle:"italic"}}>No preview text available. Download to see the full template.</p>
+              }
+            </div>
+
+            {/* What's included */}
+            <div style={{marginBottom:24}}>
+              <div style={{fontSize:12,color:t.textDim,marginBottom:8}}>
+                <span style={{color:t.green}}>✓</span> Fully branded to your identity
+              </div>
+              <div style={{fontSize:12,color:t.textDim,marginBottom:8}}>
+                <span style={{color:t.green}}>✓</span> Ready to personalize and send
+              </div>
+              <div style={{fontSize:12,color:t.textDim}}>
+                <span style={{color:t.green}}>✓</span> {preview.downloads||0} agents have downloaded this
+              </div>
+            </div>
+
+            <div style={{display:"flex",gap:10}}>
+              <button className="bp" onClick={()=>handleDl(preview)} style={{flex:1,fontSize:14}}>
+                {dl.includes(preview.id)?"✓ Downloaded — Open Again":"↓ Download Template"}
+              </button>
+              <button className="bg" onClick={()=>{toggleFav(preview.id);}} style={{fontSize:13}}>
+                {favs.includes(preview.id)?"★ Saved":"☆ Save"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
@@ -1252,6 +1307,7 @@ export default function App() {
       case "dashboard": return <Dashboard user={user} setActive={setActive}/>;
       case "marketing_weekly": return <WeeklyDrop user={user}/>;
       case "marketing_email": return <TemplateLib type="email" user={user}/>;
+      case "marketing_print": return <TemplateLib type="print" user={user}/>;
       case "marketing_social": return <TemplateLib type="social" user={user}/>;
       case "marketing_ideas": return <ContentIdeas user={user}/>;
       case "listing_services": return <ListingServices user={user}/>;
