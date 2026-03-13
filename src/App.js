@@ -184,6 +184,7 @@ const Sidebar = ({active,setActive,user,onLogout}) => {
       {key:"marketing_social",label:"Social Templates"},
       {key:"marketing_ideas",label:"Content Ideas"},
     ]},
+    {key:"developments",label:"Developments"},
     {key:"listing_services",label:"Listing Services"},
     {key:"assets",label:"Asset Delivery"},
     {key:"training",label:"Training Hub",ch:[
@@ -644,6 +645,148 @@ const ContentIdeas = ({user}) => {
               {idea.difficulty&&<span className="tag" style={{background:idea.difficulty==="easy"?"rgba(76,175,130,0.12)":"rgba(232,200,74,0.12)",color:idea.difficulty==="easy"?t.green:t.yellow,flexShrink:0}}>{idea.difficulty}</span>}
             </div>
           ))}
+        </div>
+      }
+    </div>
+  );
+};
+
+// ─── DEVELOPMENTS ─────────────────────────────────────────────────────────────
+const STATUS_CONFIG = {
+  coming_soon:{label:"Coming Soon",bg:"rgba(232,200,74,0.12)",color:"#E8C84A"},
+  active:{label:"Active",bg:"rgba(76,175,130,0.12)",color:"#4CAF82"},
+  limited:{label:"Limited Availability",bg:"rgba(201,169,110,0.12)",color:"#C9A96E"},
+  sold_out:{label:"Sold Out",bg:"rgba(150,150,150,0.12)",color:"#888"},
+  archived:{label:"Archived",bg:"rgba(150,150,150,0.08)",color:"#666"},
+};
+
+const DevelopmentsPage = ({user}) => {
+  const [devs,setDevs] = useState([]); const [loading,setLoading] = useState(true);
+  const [tab,setTab] = useState("active"); const [selected,setSelected] = useState(null);
+
+  useEffect(()=>{
+    (async()=>{
+      const d = await sb.query("developments",user.token,"&order=sort_order.asc,created_at.desc");
+      if(Array.isArray(d))setDevs(d);
+      setLoading(false);
+    })();
+  },[user]);
+
+  const active = devs.filter(d=>d.status!=="archived"&&d.status!=="sold_out");
+  const archived = devs.filter(d=>d.status==="archived"||d.status==="sold_out");
+  const list = tab==="active"?active:archived;
+
+  if(loading)return <div style={{padding:40,textAlign:"center"}}><Spin/></div>;
+  return(
+    <div className="fi">
+      <div style={{marginBottom:28}}>
+        <h1 className="dd" style={{fontSize:32,marginBottom:6}}>Developments</h1>
+        <p style={{color:t.textMuted}}>Current projects, email templates, and marketing assets for each development.</p>
+      </div>
+
+      {/* Tabs */}
+      <div style={{display:"flex",gap:4,marginBottom:24,background:t.surface,borderRadius:10,padding:4,width:"fit-content",border:`1px solid ${t.border}`}}>
+        {[["active","Active Projects"],["archived","Archives"]].map(([k,l])=>(
+          <button key={k} onClick={()=>setTab(k)} style={{padding:"8px 18px",borderRadius:7,border:"none",cursor:"pointer",fontSize:12,fontWeight:500,background:tab===k?t.accent:"transparent",color:tab===k?"#0D0D0F":t.textMuted,fontFamily:"inherit",transition:"all 0.15s"}}>{l}</button>
+        ))}
+      </div>
+
+      {list.length===0
+        ?<Empty icon="🏗" title={tab==="active"?"No active developments":"No archived developments"} sub={tab==="active"?"Developments will appear here when published.":"Past developments will be archived here."}/>
+        :<div style={{display:"flex",flexDirection:"column",gap:16}}>
+          {list.map(dev=>{
+            const sc = STATUS_CONFIG[dev.status]||STATUS_CONFIG.active;
+            const isOpen = selected===dev.id;
+            return(
+              <div key={dev.id} className="card" style={{padding:0,overflow:"hidden",border:isOpen?`1px solid ${t.accent}`:undefined}}>
+                {/* Card Header */}
+                <div onClick={()=>setSelected(isOpen?null:dev.id)} style={{padding:"22px 26px",cursor:"pointer",display:"flex",justifyContent:"space-between",alignItems:"center",gap:16}}>
+                  <div style={{flex:1}}>
+                    <div style={{display:"flex",gap:10,alignItems:"center",marginBottom:8}}>
+                      {dev.is_featured&&<span className="tag" style={{background:t.accentDim,color:t.accent,fontSize:10}}>★ Featured</span>}
+                      <span className="tag" style={{background:sc.bg,color:sc.color,fontSize:10}}>{sc.label}</span>
+                      {dev.location&&<span style={{fontSize:12,color:t.textDim}}>📍 {dev.location}</span>}
+                    </div>
+                    <h3 className="dd" style={{fontSize:22,marginBottom:4}}>{dev.name}</h3>
+                    {dev.tagline&&<p style={{fontSize:13,color:t.textMuted}}>{dev.tagline}</p>}
+                  </div>
+                  <div style={{display:"flex",gap:16,alignItems:"center",flexShrink:0}}>
+                    {dev.price_range&&<div style={{textAlign:"right"}}><div style={{fontSize:10,color:t.textDim,textTransform:"uppercase",letterSpacing:"0.07em"}}>Price</div><div style={{fontSize:14,fontWeight:600,color:t.accent}}>{dev.price_range}</div></div>}
+                    <span style={{color:t.textDim,fontSize:18,transition:"transform 0.2s",transform:isOpen?"rotate(180deg)":"rotate(0deg)"}}>▾</span>
+                  </div>
+                </div>
+
+                {/* Expanded Content */}
+                {isOpen&&(
+                  <div style={{borderTop:`1px solid ${t.border}`,padding:"24px 26px"}}>
+                    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:24}}>
+                      <div>
+                        {dev.description&&<p style={{fontSize:14,lineHeight:1.8,color:t.textMuted,marginBottom:20}}>{dev.description}</p>}
+                        {(dev.total_units||dev.units_remaining)&&(
+                          <div style={{display:"flex",gap:16,marginBottom:20}}>
+                            {dev.total_units&&<div style={{padding:"12px 16px",background:t.bg,borderRadius:8,border:`1px solid ${t.border}`,textAlign:"center",flex:1}}><div style={{fontSize:10,color:t.textDim,textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:4}}>Total Units</div><div className="dd" style={{fontSize:20}}>{dev.total_units}</div></div>}
+                            {dev.units_remaining&&<div style={{padding:"12px 16px",background:t.bg,borderRadius:8,border:`1px solid ${t.accent}40`,textAlign:"center",flex:1}}><div style={{fontSize:10,color:t.textDim,textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:4}}>Remaining</div><div className="dd" style={{fontSize:20,color:t.accent}}>{dev.units_remaining}</div></div>}
+                          </div>
+                        )}
+                        {dev.highlights&&dev.highlights.length>0&&(
+                          <div>
+                            <div style={{fontSize:12,fontWeight:600,color:t.textDim,textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:10}}>Highlights</div>
+                            {dev.highlights.map((h,i)=>(
+                              <div key={i} style={{display:"flex",gap:8,marginBottom:8,alignItems:"flex-start"}}>
+                                <span style={{color:t.accent,fontSize:13,marginTop:1}}>✦</span>
+                                <span style={{fontSize:13,color:t.textMuted,lineHeight:1.5}}>{h}</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                      <div>
+                        <div style={{fontSize:12,fontWeight:600,color:t.textDim,textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:14}}>Marketing Assets</div>
+                        <div style={{display:"flex",flexDirection:"column",gap:10}}>
+                          {dev.email_url&&(
+                            <a href={dev.email_url} target="_blank" rel="noreferrer">
+                              <div style={{padding:"14px 16px",background:t.bg,borderRadius:10,border:`1px solid ${t.border}`,display:"flex",justifyContent:"space-between",alignItems:"center",cursor:"pointer"}}>
+                                <div style={{display:"flex",gap:10,alignItems:"center"}}>
+                                  <span style={{fontSize:18}}>✉️</span>
+                                  <div><div style={{fontSize:13,fontWeight:500}}>Email Template</div><div style={{fontSize:11,color:t.textDim}}>Send to your database</div></div>
+                                </div>
+                                <span style={{color:t.accent,fontSize:13}}>↓</span>
+                              </div>
+                            </a>
+                          )}
+                          {dev.brochure_url&&(
+                            <a href={dev.brochure_url} target="_blank" rel="noreferrer">
+                              <div style={{padding:"14px 16px",background:t.bg,borderRadius:10,border:`1px solid ${t.border}`,display:"flex",justifyContent:"space-between",alignItems:"center",cursor:"pointer"}}>
+                                <div style={{display:"flex",gap:10,alignItems:"center"}}>
+                                  <span style={{fontSize:18}}>📄</span>
+                                  <div><div style={{fontSize:13,fontWeight:500}}>Brochure / One Pager</div><div style={{fontSize:11,color:t.textDim}}>Share with clients</div></div>
+                                </div>
+                                <span style={{color:t.accent,fontSize:13}}>↓</span>
+                              </div>
+                            </a>
+                          )}
+                          {dev.website_url&&(
+                            <a href={dev.website_url} target="_blank" rel="noreferrer">
+                              <div style={{padding:"14px 16px",background:t.bg,borderRadius:10,border:`1px solid ${t.border}`,display:"flex",justifyContent:"space-between",alignItems:"center",cursor:"pointer"}}>
+                                <div style={{display:"flex",gap:10,alignItems:"center"}}>
+                                  <span style={{fontSize:18}}>🌐</span>
+                                  <div><div style={{fontSize:13,fontWeight:500}}>Project Website</div><div style={{fontSize:11,color:t.textDim}}>Send to interested buyers</div></div>
+                                </div>
+                                <span style={{color:t.accent,fontSize:13}}>↗</span>
+                              </div>
+                            </a>
+                          )}
+                          {!dev.email_url&&!dev.brochure_url&&!dev.website_url&&(
+                            <p style={{fontSize:13,color:t.textDim,fontStyle:"italic"}}>Assets coming soon...</p>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </div>
       }
     </div>
@@ -1233,6 +1376,7 @@ const Admin = ({user}) => {
   const [vid,setVid] = useState({title:"",category:"",video_url:"",duration_label:""});
   const [course,setCourse] = useState({title:"",category:"",description:"",duration_label:"",thumbnail_emoji:"📚",total_lessons:0});
   const [dl,setDl] = useState({title:"",type:"",format:"PDF",file_url:""});
+  const [dev,setDev] = useState({name:"",tagline:"",description:"",status:"active",price_range:"",location:"",total_units:"",units_remaining:"",email_url:"",brochure_url:"",website_url:"",highlights:["","",""],is_featured:false});
   const [saving,setSaving] = useState(false); const [msg,setMsg] = useState("");
 
   useEffect(()=>{
@@ -1268,7 +1412,7 @@ const Admin = ({user}) => {
     <div className="fi">
       <div style={{marginBottom:24}}><h1 className="dd" style={{fontSize:32,marginBottom:6}}>Admin Panel</h1><p style={{color:t.textMuted}}>Manage members, content, and requests.</p></div>
       <div style={{display:"flex",gap:4,marginBottom:24,background:t.surface,borderRadius:10,padding:4,width:"fit-content",border:`1px solid ${t.border}`}}>
-        {["overview","members","templates","weekly drop","videos","courses","downloads"].map(x=>(
+        {["overview","members","templates","weekly drop","videos","courses","downloads","developments"].map(x=>(
           <button key={x} onClick={()=>setTab(x)} style={{padding:"8px 16px",borderRadius:7,border:"none",cursor:"pointer",fontSize:12,fontWeight:500,textTransform:"capitalize",background:tab===x?t.accent:"transparent",color:tab===x?"#0D0D0F":t.textMuted,fontFamily:"inherit",transition:"all 0.15s"}}>{x}</button>
         ))}
       </div>
@@ -1287,7 +1431,7 @@ const Admin = ({user}) => {
           <div className="card" style={{padding:22}}>
             <h3 style={{fontSize:15,fontWeight:600,marginBottom:14}}>Quick Actions</h3>
             <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
-              {["templates","weekly drop","videos","courses","downloads"].map(x=><button key={x} className="bg" onClick={()=>setTab(x)} style={{textTransform:"capitalize",fontSize:13}}>+ Add {x}</button>)}
+              {["templates","weekly drop","videos","courses","downloads","developments"].map(x=><button key={x} className="bg" onClick={()=>setTab(x)} style={{textTransform:"capitalize",fontSize:13}}>+ Add {x}</button>)}
             </div>
           </div>
         </div>
@@ -1442,6 +1586,54 @@ const Admin = ({user}) => {
           <button className="bp" onClick={()=>save(()=>sb.insert("resource_downloads",user.token,{...dl,is_published:true}),()=>setDl({title:"",type:"",format:"PDF",file_url:""}),"✓ Download published!")} disabled={saving||!dl.title}>{saving?<Spin/>:"Publish Download →"}</button>
         </div>
       )}
+
+      {tab==="developments"&&(
+        <div className="card" style={{padding:28}}>
+          <h3 style={{fontSize:16,fontWeight:600,marginBottom:6}}>Add Development Project</h3>
+          <p style={{fontSize:13,color:t.textMuted,marginBottom:24}}>Each development gets its own permanent page with all assets. Update anytime.</p>
+
+          <div style={{fontSize:12,fontWeight:700,color:t.accent,textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:12,paddingBottom:8,borderBottom:`1px solid ${t.border}`}}>Project Details</div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14,marginBottom:20}}>
+            <div><label>Development Name *</label><input value={dev.name} onChange={e=>setDev(f=>({...f,name:e.target.value}))} placeholder="The Guild"/></div>
+            <div><label>Status</label>
+              <select value={dev.status} onChange={e=>setDev(f=>({...f,status:e.target.value}))}>
+                <option value="coming_soon">Coming Soon</option>
+                <option value="active">Active</option>
+                <option value="limited">Limited Availability</option>
+                <option value="sold_out">Sold Out</option>
+                <option value="archived">Archived</option>
+              </select>
+            </div>
+            <div><label>Tagline</label><input value={dev.tagline} onChange={e=>setDev(f=>({...f,tagline:e.target.value}))} placeholder="Boutique urban living in the heart of the city"/></div>
+            <div><label>Location</label><input value={dev.location} onChange={e=>setDev(f=>({...f,location:e.target.value}))} placeholder="Boston, MA"/></div>
+            <div><label>Price Range</label><input value={dev.price_range} onChange={e=>setDev(f=>({...f,price_range:e.target.value}))} placeholder="From $650,000"/></div>
+            <div><label>Total Units</label><input value={dev.total_units} onChange={e=>setDev(f=>({...f,total_units:e.target.value}))} placeholder="48"/></div>
+            <div><label>Units Remaining</label><input value={dev.units_remaining} onChange={e=>setDev(f=>({...f,units_remaining:e.target.value}))} placeholder="12"/></div>
+            <div style={{display:"flex",alignItems:"center",gap:10,paddingTop:20}}>
+              <input type="checkbox" checked={dev.is_featured} onChange={e=>setDev(f=>({...f,is_featured:e.target.checked}))} style={{width:"auto"}}/>
+              <label style={{margin:0}}>Mark as Featured</label>
+            </div>
+          </div>
+          <div style={{marginBottom:20}}><label>Description</label><textarea value={dev.description} onChange={e=>setDev(f=>({...f,description:e.target.value}))} placeholder="Full description of the development for agents to reference..."/></div>
+
+          <div style={{fontSize:12,fontWeight:700,color:t.accent,textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:12,paddingBottom:8,borderBottom:`1px solid ${t.border}`}}>Highlights (bullet points)</div>
+          <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:20}}>
+            {dev.highlights.map((h,i)=>(
+              <input key={i} value={h} onChange={e=>setDev(f=>({...f,highlights:f.highlights.map((x,j)=>j===i?e.target.value:x)}))} placeholder={`Highlight ${i+1} — e.g. Rooftop terrace with city views`}/>
+            ))}
+            <button className="bg" style={{fontSize:12,width:"fit-content"}} onClick={()=>setDev(f=>({...f,highlights:[...f.highlights,""]}))}>+ Add Highlight</button>
+          </div>
+
+          <div style={{fontSize:12,fontWeight:700,color:t.accent,textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:12,paddingBottom:8,borderBottom:`1px solid ${t.border}`}}>Marketing Assets</div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14,marginBottom:24}}>
+            <div><label>Email Template URL</label><input value={dev.email_url} onChange={e=>setDev(f=>({...f,email_url:e.target.value}))} placeholder="https://canva.com/..."/></div>
+            <div><label>Brochure URL</label><input value={dev.brochure_url} onChange={e=>setDev(f=>({...f,brochure_url:e.target.value}))} placeholder="https://drive.google.com/..."/></div>
+            <div><label>Project Website URL</label><input value={dev.website_url} onChange={e=>setDev(f=>({...f,website_url:e.target.value}))} placeholder="https://theguildboston.com"/></div>
+          </div>
+
+          <button className="bp" onClick={()=>save(()=>sb.insert("developments",user.token,{...dev,highlights:dev.highlights.filter(h=>h.trim())}),()=>setDev({name:"",tagline:"",description:"",status:"active",price_range:"",location:"",total_units:"",units_remaining:"",email_url:"",brochure_url:"",website_url:"",highlights:["","",""],is_featured:false}),"✓ Development published!")} disabled={saving||!dev.name}>{saving?<Spin/>:"Publish Development →"}</button>
+        </div>
+      )}
     </div>
   );
 };
@@ -1457,6 +1649,7 @@ export default function App() {
     switch(active){
       case "dashboard": return <Dashboard user={user} setActive={setActive}/>;
       case "marketing_weekly": return <WeeklyDrop user={user}/>;
+      case "developments": return <DevelopmentsPage user={user}/>;
       case "marketing_email": return <TemplateLib type="email" user={user}/>;
       case "marketing_print": return <TemplateLib type="print" user={user}/>;
       case "marketing_social": return <TemplateLib type="social" user={user}/>;
