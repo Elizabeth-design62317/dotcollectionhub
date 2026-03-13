@@ -493,10 +493,31 @@ const ContentIdeas = ({user}) => {
 };
 
 // ─── LISTING SERVICES ─────────────────────────────────────────────────────────
+const PACKAGES = [
+  {id:"essential",name:"Essential Launch",price:"Starting at $495",emoji:"✦",
+   includes:["Photography","Basic floor plan","Template beauty sheet","MLS-ready property summary","Social media launch graphics"]},
+  {id:"signature",name:"Signature Launch",price:"Starting at $995",emoji:"✦✦",highlight:true,
+   includes:["Photography","Video walkthrough / reel","Floor plan","Custom beauty sheet","Property website","Social media launch graphics","Email marketing template / blast setup"]},
+  {id:"premier",name:"Premier Launch",price:"Starting at $1,750",emoji:"✦✦✦",
+   includes:["Photography","Cinematic video","Drone","Floor plan","Custom beauty sheet or brochure","Property website","Social media launch graphics","Email marketing campaign","Coming soon assets","Open house marketing kit"]},
+];
+const ADDONS = ["Drone upgrade","Additional reel / edited video cut","Custom brochure","Extra open house graphics","Neighborhood / lifestyle feature","Coming soon campaign","Email blast upgrade","Property website upgrade","Twilight edit / virtual enhancement","Rush turnaround"];
+
+const emptyForm = {
+  // package
+  package:"", addons:[],
+  // section 1
+  address:"",propType:"",price:"",beds:"",baths:"",sqft:"",lotSize:"",yearBuilt:"",hoa:"",parking:"",
+  // section 2
+  headline:"",remarks:"",neighborhood:"",upgrades:"",outdoor:"",openHouse:"",offerDeadline:"",disclosures:"",
+  // section 3
+  launchDate:"",shootDate:"",occupancy:"",staging:"",accessInstructions:"",accessContact:"",internalNotes:"",
+};
+
 const ListingServices = ({user}) => {
   const [reqs,setReqs] = useState([]); const [loading,setLoading] = useState(true);
-  const [showForm,setShowForm] = useState(false);
-  const [form,setForm] = useState({address:"",price:"",launch:"",services:[],notes:""});
+  const [step,setStep] = useState(0); // 0=list, 1=package, 2=form, 3=addons
+  const [form,setForm] = useState(emptyForm);
   const [submitting,setSubmitting] = useState(false); const [ok,setOk] = useState(false);
 
   const load = useCallback(async()=>{
@@ -505,19 +526,40 @@ const ListingServices = ({user}) => {
     if(Array.isArray(d))setReqs(d);
     setLoading(false);
   },[user]);
-
   useEffect(()=>{load();},[load]);
 
-  const svcs = ["Photography","Videography","Drone","Floor Plans","Beauty Sheet","Brochure","Social Media Launch Assets","Property Website","Email Blast","Coming Soon Package","Full Launch Package"];
+  const F = (field,placeholder,label,type="text",opts=null) => (
+    <div>
+      <label>{label}</label>
+      {opts
+        ? <select value={form[field]} onChange={e=>setForm(f=>({...f,[field]:e.target.value}))}>
+            <option value="">Select...</option>
+            {opts.map(o=><option key={o} value={o}>{o}</option>)}
+          </select>
+        : <input type={type} placeholder={placeholder} value={form[field]} onChange={e=>setForm(f=>({...f,[field]:e.target.value}))}/>
+      }
+    </div>
+  );
 
   const submit = async()=>{
-    if(!form.address||!form.services.length)return;
+    if(!form.address||!form.package)return;
     setSubmitting(true);
+    const pkg = PACKAGES.find(p=>p.id===form.package);
     const d = await sb.insert("listing_requests",user.token,{
-      agent_id:user.id,property_address:form.address,list_price:form.price,
-      target_launch_date:form.launch||null,services_requested:form.services,notes:form.notes,status:"request_submitted"
+      agent_id:user.id,
+      property_address:form.address,
+      list_price:form.price,
+      target_launch_date:form.launchDate||null,
+      services_requested:[pkg?.name,...form.addons],
+      notes:JSON.stringify({
+        package:form.package,addons:form.addons,
+        section1:{propType:form.propType,beds:form.beds,baths:form.baths,sqft:form.sqft,lotSize:form.lotSize,yearBuilt:form.yearBuilt,hoa:form.hoa,parking:form.parking},
+        section2:{headline:form.headline,remarks:form.remarks,neighborhood:form.neighborhood,upgrades:form.upgrades,outdoor:form.outdoor,openHouse:form.openHouse,offerDeadline:form.offerDeadline,disclosures:form.disclosures},
+        section3:{shootDate:form.shootDate,occupancy:form.occupancy,staging:form.staging,accessInstructions:form.accessInstructions,accessContact:form.accessContact,internalNotes:form.internalNotes},
+      }),
+      status:"request_submitted"
     });
-    if(Array.isArray(d)&&d[0]){setReqs(r=>[d[0],...r]);setForm({address:"",price:"",launch:"",services:[],notes:""});setShowForm(false);setOk(true);setTimeout(()=>setOk(false),4000);}
+    if(Array.isArray(d)&&d[0]){setReqs(r=>[d[0],...r]);setForm(emptyForm);setStep(0);setOk(true);setTimeout(()=>setOk(false),5000);}
     setSubmitting(false);
   };
 
@@ -526,71 +568,206 @@ const ListingServices = ({user}) => {
     setReqs(rs=>rs.map(r=>r.id===id?{...r,status}:r));
   };
 
+  const sec = {fontSize:13,fontWeight:700,color:t.accent,textTransform:"uppercase",letterSpacing:"0.1em",marginBottom:14,marginTop:8,paddingBottom:8,borderBottom:`1px solid ${t.border}`};
+  const grid2 = {display:"grid",gridTemplateColumns:"1fr 1fr",gap:14,marginBottom:4};
+  const grid1 = {display:"grid",gridTemplateColumns:"1fr",gap:14,marginBottom:4};
+
   if(loading)return <div style={{padding:40,textAlign:"center"}}><Spin/></div>;
   return(
     <div className="fi">
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:28}}>
         <div>
           <h1 className="dd" style={{fontSize:32,marginBottom:6}}>Listing Services</h1>
-          <p style={{color:t.textMuted}}>Request photography, marketing assets, and launch packages.</p>
+          <p style={{color:t.textMuted}}>Photography, marketing assets, and launch packages for your listings.</p>
         </div>
-        <button className="bp" onClick={()=>setShowForm(!showForm)}>+ New Request</button>
+        {step===0&&<button className="bp" onClick={()=>setStep(1)}>+ New Request</button>}
       </div>
+
       {ok&&<div style={{padding:"14px 18px",background:"rgba(76,175,130,0.12)",border:`1px solid ${t.green}40`,borderRadius:10,marginBottom:20,color:t.green,fontSize:14}}>✓ Request submitted! You'll receive status updates here.</div>}
-      {showForm&&(
-        <div className="card" style={{padding:28,marginBottom:24,border:`1px solid rgba(201,169,110,0.3)`}}>
-          <h3 style={{fontSize:18,fontWeight:600,marginBottom:20}}>New Listing Request</h3>
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16,marginBottom:16}}>
-            <div><label>Property Address *</label><input placeholder="142 Maple St, Boston MA" value={form.address} onChange={e=>setForm(f=>({...f,address:e.target.value}))}/></div>
-            <div><label>List Price</label><input placeholder="$595,000" value={form.price} onChange={e=>setForm(f=>({...f,price:e.target.value}))}/></div>
-            <div><label>Target Launch Date</label><input type="date" value={form.launch} onChange={e=>setForm(f=>({...f,launch:e.target.value}))}/></div>
-          </div>
-          <div style={{marginBottom:16}}>
-            <label>Services Requested *</label>
-            <div style={{display:"flex",flexWrap:"wrap",gap:8,marginTop:6}}>
-              {svcs.map(s=>(
-                <button key={s} onClick={()=>setForm(f=>({...f,services:f.services.includes(s)?f.services.filter(x=>x!==s):[...f.services,s]}))}
-                  style={{padding:"7px 12px",borderRadius:20,border:`1px solid ${form.services.includes(s)?t.accent:t.border}`,background:form.services.includes(s)?t.accentDim:"transparent",color:form.services.includes(s)?t.accent:t.textMuted,cursor:"pointer",fontSize:12,transition:"all 0.15s",fontFamily:"inherit"}}>{s}</button>
-              ))}
+
+      {/* STEP 1 — PACKAGE SELECTION */}
+      {step===1&&(
+        <div style={{marginBottom:24}}>
+          <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:24}}>
+            <button className="bg" onClick={()=>setStep(0)} style={{fontSize:12}}>← Back</button>
+            <div>
+              <h2 style={{fontSize:20,fontWeight:600}}>Select Your Launch Package</h2>
+              <p style={{fontSize:13,color:t.textMuted}}>Choose the package that fits your listing.</p>
             </div>
           </div>
-          <div style={{marginBottom:20}}><label>Notes</label><textarea placeholder="Staging status, access info, special requests..." value={form.notes} onChange={e=>setForm(f=>({...f,notes:e.target.value}))}/></div>
-          <div style={{display:"flex",gap:10}}>
-            <button className="bp" onClick={submit} disabled={submitting}>{submitting?<Spin/>:"Submit Request →"}</button>
-            <button className="bg" onClick={()=>setShowForm(false)}>Cancel</button>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:16}}>
+            {PACKAGES.map(pkg=>(
+              <div key={pkg.id} onClick={()=>{setForm(f=>({...f,package:pkg.id}));setStep(2);}}
+                style={{padding:28,borderRadius:14,border:`2px solid ${pkg.highlight?t.accent:t.border}`,background:pkg.highlight?`linear-gradient(135deg,${t.surface},${t.accentDim})`:t.surface,cursor:"pointer",transition:"all 0.2s",position:"relative"}}
+                onMouseEnter={e=>{e.currentTarget.style.borderColor=t.accent;e.currentTarget.style.transform="translateY(-2px)";}}
+                onMouseLeave={e=>{e.currentTarget.style.borderColor=pkg.highlight?t.accent:t.border;e.currentTarget.style.transform="translateY(0)";}}
+              >
+                {pkg.highlight&&<div style={{position:"absolute",top:-1,left:"50%",transform:"translateX(-50%)",background:t.accent,color:"#0D0D0F",fontSize:10,fontWeight:700,padding:"3px 12px",borderRadius:"0 0 8px 8px",letterSpacing:"0.08em"}}>MOST POPULAR</div>}
+                <div style={{fontSize:22,marginBottom:10,color:t.accent}}>{pkg.emoji}</div>
+                <h3 className="dd" style={{fontSize:20,marginBottom:4}}>{pkg.name}</h3>
+                <div style={{fontSize:13,color:t.accent,fontWeight:600,marginBottom:18}}>{pkg.price}</div>
+                <div style={{display:"flex",flexDirection:"column",gap:7}}>
+                  {pkg.includes.map(item=>(
+                    <div key={item} style={{display:"flex",gap:8,alignItems:"flex-start"}}>
+                      <span style={{color:t.green,fontSize:13,marginTop:1,flexShrink:0}}>✓</span>
+                      <span style={{fontSize:13,color:t.textMuted,lineHeight:1.4}}>{item}</span>
+                    </div>
+                  ))}
+                </div>
+                <button className="bp" style={{width:"100%",marginTop:22,fontSize:13}}>Select {pkg.name} →</button>
+              </div>
+            ))}
           </div>
         </div>
       )}
-      {reqs.length===0
-        ?<Empty icon="🏡" title="No requests yet" sub="Submit your first listing service request above." action={<button className="bp" onClick={()=>setShowForm(true)}>+ New Request</button>}/>
-        :<div style={{display:"flex",flexDirection:"column",gap:12}}>
-          {reqs.map(req=>{
-            const s = sc(req.status);
-            return(
-              <div key={req.id} className="card" style={{padding:"20px 24px"}}>
-                <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
-                  <div style={{flex:1}}>
-                    <h3 style={{fontSize:15,fontWeight:600,marginBottom:6}}>{req.property_address}</h3>
-                    <div style={{display:"flex",gap:12,flexWrap:"wrap"}}>
-                      {req.services_requested?.length>0&&<span style={{fontSize:12.5,color:t.textMuted}}>{req.services_requested.join(", ")}</span>}
-                      {req.list_price&&<span style={{fontSize:12.5,color:t.textMuted}}>List: {req.list_price}</span>}
-                      <span style={{fontSize:12.5,color:t.textDim}}>{new Date(req.created_at).toLocaleDateString()}</span>
+
+      {/* STEP 2 — INTAKE FORM */}
+      {step===2&&(
+        <div className="card" style={{padding:32,marginBottom:24,border:`1px solid rgba(201,169,110,0.3)`}}>
+          <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:28}}>
+            <button className="bg" onClick={()=>setStep(1)} style={{fontSize:12}}>← Back</button>
+            <div>
+              <h2 style={{fontSize:20,fontWeight:600}}>Listing Intake Form</h2>
+              <div style={{fontSize:13,color:t.accent,marginTop:2}}>Package: {PACKAGES.find(p=>p.id===form.package)?.name} — {PACKAGES.find(p=>p.id===form.package)?.price}</div>
+            </div>
+          </div>
+
+          <div style={sec}>Section 1 — Listing Basics</div>
+          <div style={grid2}>
+            {F("address","142 Maple St, Boston MA","Property Address *")}
+            {F("propType","","Property Type",null,["Single Family","Condo","Townhouse","Multi-Family","Land","Commercial"])}
+            {F("price","$595,000","List Price")}
+            {F("beds","3","Bedrooms")}
+            {F("baths","2","Bathrooms")}
+            {F("sqft","1,850","Square Footage")}
+            {F("lotSize","0.25 acres","Lot Size")}
+            {F("yearBuilt","2002","Year Built")}
+            {F("hoa","$250/mo","HOA Fee")}
+            {F("parking","2-car garage","Parking")}
+          </div>
+
+          <div style={{...sec,marginTop:28}}>Section 2 — Marketing Content</div>
+          <div style={grid1}>
+            {F("headline","Stunning renovated colonial steps from the common...","Public-Facing Headline")}
+          </div>
+          <div style={{marginBottom:14}}>
+            <label>Public Remarks / Property Description</label>
+            <textarea placeholder="Describe the property for MLS and marketing..." value={form.remarks} onChange={e=>setForm(f=>({...f,remarks:e.target.value}))} style={{minHeight:100}}/>
+          </div>
+          <div style={grid2}>
+            {F("neighborhood","Close to downtown, top-rated schools...","Neighborhood / Location Highlights")}
+            {F("upgrades","New kitchen 2022, roof 2020...","Notable Upgrades / Renovations")}
+            {F("outdoor","Large deck, fenced yard, fire pit...","Outdoor Space")}
+            {F("openHouse","Sunday March 23, 1–3pm","Open House Date(s)")}
+            {F("offerDeadline","Monday March 24 at 5pm","Offer Deadline")}
+          </div>
+          <div style={{marginBottom:14}}>
+            <label>Disclosure / Disclaimer Notes</label>
+            <textarea placeholder="Any disclosures agents should know..." value={form.disclosures} onChange={e=>setForm(f=>({...f,disclosures:e.target.value}))}/>
+          </div>
+
+          <div style={{...sec,marginTop:28}}>Section 3 — Logistics</div>
+          <div style={grid2}>
+            {F("launchDate","","Target Launch Date","date")}
+            {F("shootDate","","Preferred Shoot Date","date")}
+            {F("occupancy","","Occupancy Status",null,["Owner Occupied","Tenant Occupied","Vacant","New Construction"])}
+            {F("staging","","Staging Status",null,["Fully Staged","Partially Staged","Seller Furnished","Vacant","Virtual Only"])}
+            {F("accessContact","Jane Smith · 617-555-0199","Property Access Contact")}
+          </div>
+          <div style={{marginBottom:14}}>
+            <label>Access Instructions</label>
+            <textarea placeholder="Lockbox code, key pickup, showing instructions..." value={form.accessInstructions} onChange={e=>setForm(f=>({...f,accessInstructions:e.target.value}))}/>
+          </div>
+          <div style={{marginBottom:20}}>
+            <label>Internal Notes / Special Instructions</label>
+            <textarea placeholder="Anything the Dot team should know..." value={form.internalNotes} onChange={e=>setForm(f=>({...f,internalNotes:e.target.value}))}/>
+          </div>
+
+          <div style={{display:"flex",gap:10}}>
+            <button className="bp" onClick={()=>setStep(3)} disabled={!form.address}>Continue to Add-Ons →</button>
+            <button className="bg" onClick={()=>{setStep(0);setForm(emptyForm);}}>Cancel</button>
+          </div>
+        </div>
+      )}
+
+      {/* STEP 3 — ADD-ONS */}
+      {step===3&&(
+        <div className="card" style={{padding:32,marginBottom:24,border:`1px solid rgba(201,169,110,0.3)`}}>
+          <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:24}}>
+            <button className="bg" onClick={()=>setStep(2)} style={{fontSize:12}}>← Back</button>
+            <div>
+              <h2 style={{fontSize:20,fontWeight:600}}>Optional Add-Ons</h2>
+              <p style={{fontSize:13,color:t.textMuted}}>Enhance your {PACKAGES.find(p=>p.id===form.package)?.name} package.</p>
+            </div>
+          </div>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:10,marginBottom:28}}>
+            {ADDONS.map(a=>{
+              const sel = form.addons.includes(a);
+              return(
+                <div key={a} onClick={()=>setForm(f=>({...f,addons:sel?f.addons.filter(x=>x!==a):[...f.addons,a]}))}
+                  style={{padding:"14px 18px",borderRadius:10,border:`1px solid ${sel?t.accent:t.border}`,background:sel?t.accentDim:t.surface,cursor:"pointer",display:"flex",gap:12,alignItems:"center",transition:"all 0.15s"}}>
+                  <div style={{width:20,height:20,borderRadius:6,border:`2px solid ${sel?t.accent:t.border}`,background:sel?t.accent:"transparent",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,transition:"all 0.15s"}}>
+                    {sel&&<span style={{color:"#0D0D0F",fontSize:12,fontWeight:700}}>✓</span>}
+                  </div>
+                  <span style={{fontSize:13,color:sel?t.accent:t.text}}>{a}</span>
+                </div>
+              );
+            })}
+          </div>
+          <div style={{padding:"16px 20px",background:t.bg,borderRadius:10,border:`1px solid ${t.border}`,marginBottom:24}}>
+            <div style={{fontSize:13,fontWeight:600,marginBottom:8}}>Order Summary</div>
+            <div style={{display:"flex",justifyContent:"space-between",fontSize:13,marginBottom:4}}>
+              <span>{PACKAGES.find(p=>p.id===form.package)?.name}</span>
+              <span style={{color:t.accent}}>{PACKAGES.find(p=>p.id===form.package)?.price}</span>
+            </div>
+            {form.addons.map(a=>(
+              <div key={a} style={{display:"flex",justifyContent:"space-between",fontSize:12,color:t.textMuted,marginBottom:2}}>
+                <span>+ {a}</span><span>TBD</span>
+              </div>
+            ))}
+            <div style={{borderTop:`1px solid ${t.border}`,marginTop:12,paddingTop:10,fontSize:12,color:t.textDim}}>Final pricing confirmed by Dot team after review.</div>
+          </div>
+          <div style={{display:"flex",gap:10}}>
+            <button className="bp" onClick={submit} disabled={submitting||!form.address}>{submitting?<Spin/>:"Submit Request →"}</button>
+            <button className="bg" onClick={()=>{setStep(0);setForm(emptyForm);}}>Cancel</button>
+          </div>
+        </div>
+      )}
+
+      {/* REQUEST LIST */}
+      {step===0&&(
+        reqs.length===0
+          ?<Empty icon="🏡" title="No requests yet" sub="Submit your first listing service request above." action={<button className="bp" onClick={()=>setStep(1)}>+ New Request</button>}/>
+          :<div style={{display:"flex",flexDirection:"column",gap:12}}>
+            {reqs.map(req=>{
+              const s = sc(req.status);
+              let pkg = ""; try{ pkg = JSON.parse(req.notes||"{}").package||""; }catch(e){}
+              const pkgName = PACKAGES.find(p=>p.id===pkg)?.name||req.services_requested?.[0]||"";
+              return(
+                <div key={req.id} className="card" style={{padding:"20px 24px"}}>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
+                    <div style={{flex:1}}>
+                      <h3 style={{fontSize:15,fontWeight:600,marginBottom:6}}>{req.property_address}</h3>
+                      <div style={{display:"flex",gap:12,flexWrap:"wrap"}}>
+                        {pkgName&&<span className="tag" style={{background:t.accentDim,color:t.accent}}>{pkgName}</span>}
+                        {req.list_price&&<span style={{fontSize:12.5,color:t.textMuted}}>List: {req.list_price}</span>}
+                        <span style={{fontSize:12.5,color:t.textDim}}>{new Date(req.created_at).toLocaleDateString()}</span>
+                      </div>
+                    </div>
+                    <div style={{display:"flex",gap:10,alignItems:"center",flexShrink:0}}>
+                      <span className="sb" style={{background:s.bg,color:s.color}}>{fs(req.status)}</span>
+                      {user.role==="admin"&&(
+                        <select value={req.status} onChange={e=>updStatus(req.id,e.target.value)} style={{width:"auto",fontSize:12,padding:"4px 8px"}}>
+                          {["request_submitted","under_review","scheduled","in_progress","waiting_on_agent","completed","delivered"].map(x=><option key={x} value={x}>{fs(x)}</option>)}
+                        </select>
+                      )}
                     </div>
                   </div>
-                  <div style={{display:"flex",gap:10,alignItems:"center",flexShrink:0}}>
-                    <span className="sb" style={{background:s.bg,color:s.color}}>{fs(req.status)}</span>
-                    {user.role==="admin"&&(
-                      <select value={req.status} onChange={e=>updStatus(req.id,e.target.value)} style={{width:"auto",fontSize:12,padding:"4px 8px"}}>
-                        {["request_submitted","under_review","scheduled","in_progress","waiting_on_agent","completed","delivered"].map(x=><option key={x} value={x}>{fs(x)}</option>)}
-                      </select>
-                    )}
-                  </div>
                 </div>
-              </div>
-            );
-          })}
-        </div>
-      }
+              );
+            })}
+          </div>
+      )}
     </div>
   );
 };
