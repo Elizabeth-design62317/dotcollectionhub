@@ -599,7 +599,9 @@ const ListingServices = ({user}) => {
 const AssetDelivery = ({user}) => {
   const [reqs,setReqs] = useState([]); const [idx,setIdx] = useState(0);
   const [assets,setAssets] = useState([]); const [loading,setLoading] = useState(true);
-  const [upName,setUpName] = useState(""); const [uploading,setUploading] = useState(false);
+  const [uploading,setUploading] = useState(false); const [dragOver,setDragOver] = useState(false);
+  const [uploadProgress,setUploadProgress] = useState("");
+  const fileInputRef = useCallback(node => { if(node) node.value = ""; }, []);
 
   useEffect(()=>{
     (async()=>{
@@ -619,24 +621,55 @@ const AssetDelivery = ({user}) => {
     if(Array.isArray(a))setAssets(a);
   };
 
-  const upload = async()=>{
-    if(!upName||!reqs[idx])return;
+  const uploadFile = async(file)=>{
+    if(!file||!reqs[idx])return;
     setUploading(true);
-    const d = await sb.insert("assets",user.token,{
-      request_id:reqs[idx].id,uploaded_by:user.id,
-      direction:user.role==="admin"?"team_to_agent":"agent_to_team",
-      file_name:upName,file_url:"#",file_type:"Upload",
-    });
-    if(Array.isArray(d)&&d[0])setAssets(a=>[d[0],...a]);
-    setUpName(""); setUploading(false);
+    setUploadProgress(`Uploading ${file.name}...`);
+    try {
+      // Upload to Supabase Storage
+      const filePath = `${reqs[idx].id}/${Date.now()}_${file.name}`;
+      const uploadResp = await fetch(`${SUPABASE_URL}/storage/v1/object/assets/${filePath}`, {
+        method: "POST",
+        headers: { ...sb.authHeaders(user.token), "Content-Type": file.type },
+        body: file
+      });
+      if(!uploadResp.ok) throw new Error("Upload failed");
+
+      // Get signed download URL
+      const urlResp = await fetch(`${SUPABASE_URL}/storage/v1/object/sign/assets/${filePath}`, {
+        method: "POST",
+        headers: { ...sb.authHeaders(user.token), "Content-Type": "application/json" },
+        body: JSON.stringify({ expiresIn: 31536000 }) // 1 year
+      });
+      const urlData = await urlResp.json();
+      const fileUrl = urlData.signedURL ? `${SUPABASE_URL}/storage/v1${urlData.signedURL}` : "#";
+
+      // Save record to assets table
+      const d = await sb.insert("assets",user.token,{
+        request_id:reqs[idx].id, uploaded_by:user.id,
+        direction:user.role==="admin"?"team_to_agent":"agent_to_team",
+        file_name:file.name, file_url:fileUrl,
+        file_type:file.type||"File", file_size:file.size,
+      });
+      if(Array.isArray(d)&&d[0])setAssets(a=>[d[0],...a]);
+      setUploadProgress("✓ Upload complete!");
+      setTimeout(()=>setUploadProgress(""),3000);
+    } catch(e) {
+      setUploadProgress("Upload failed. Please try again.");
+      setTimeout(()=>setUploadProgress(""),3000);
+    }
+    setUploading(false);
   };
+
+  const handleFileInput = (e)=>{ if(e.target.files[0]) uploadFile(e.target.files[0]); };
+  const handleDrop = (e)=>{ e.preventDefault(); setDragOver(false); if(e.dataTransfer.files[0]) uploadFile(e.dataTransfer.files[0]); };
 
   if(loading)return <div style={{padding:40,textAlign:"center"}}><Spin/></div>;
   return(
     <div className="fi">
       <div style={{marginBottom:28}}>
         <h1 className="dd" style={{fontSize:32,marginBottom:6}}>Asset Delivery</h1>
-        <p style={{color:t.textMuted}}>Upload listing files or download completed assets from the Dot team.</p>
+        <p style={{color:t.textMuted}}>Upload and download files for each listing.</p>
       </div>
       {reqs.length===0
         ?<Empty icon="⬡" title="No listings yet" sub="Submit a listing service request first to manage assets."/>
@@ -653,7 +686,7 @@ const AssetDelivery = ({user}) => {
             <h3 style={{fontSize:16,fontWeight:600,marginBottom:4}}>{reqs[idx]?.property_address}</h3>
             <p style={{fontSize:13,color:t.textMuted,marginBottom:20}}>All files for this listing.</p>
             {assets.length===0
-              ?<Empty icon="📁" title="No files yet" sub="Upload a file below or wait for the Dot team to deliver assets."/>
+              ?<Empty icon="📁" title="No files yet" sub="Drag and drop a file below or click to upload."/>
               :<div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:20}}>
                 {assets.map((f,i)=>(
                   <div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"12px 14px",background:t.bg,borderRadius:8,border:`1px solid ${t.border}`}}>
@@ -661,23 +694,40 @@ const AssetDelivery = ({user}) => {
                       <span style={{fontSize:20}}>{f.direction==="team_to_agent"?"📦":"📄"}</span>
                       <div>
                         <div style={{fontSize:13.5,fontWeight:500}}>{f.file_name}</div>
-                        <div style={{fontSize:11,color:t.textDim}}>{f.file_type} · {new Date(f.created_at).toLocaleDateString()}</div>
+                        <div style={{fontSize:11,color:t.textDim}}>
+                          {f.file_type} · {new Date(f.created_at).toLocaleDateString()}
+                          {f.file_size&&` · ${(f.file_size/1024/1024).toFixed(1)}MB`}
+                        </div>
                       </div>
                     </div>
                     <div style={{display:"flex",gap:8,alignItems:"center"}}>
                       <span className="tag" style={{background:f.direction==="team_to_agent"?"rgba(76,175,130,0.12)":"rgba(91,143,212,0.12)",color:f.direction==="team_to_agent"?t.green:t.blue}}>{f.direction==="team_to_agent"?"From Dot":"From You"}</span>
-                      {f.direction==="team_to_agent"&&f.file_url!=="#"&&<a href={f.file_url} target="_blank" rel="noreferrer"><button className="bg" style={{fontSize:11,padding:"5px 10px"}}>↓ Download</button></a>}
+                      {f.file_url&&f.file_url!=="#"&&<a href={f.file_url} target="_blank" rel="noreferrer"><button className="bg" style={{fontSize:11,padding:"5px 10px"}}>↓ Download</button></a>}
                     </div>
                   </div>
                 ))}
               </div>
             }
-            <div style={{padding:"18px 20px",background:t.bg,borderRadius:10,border:`1px dashed ${t.borderLight}`}}>
-              <p style={{fontSize:13,fontWeight:500,marginBottom:12}}>↑ Upload a file to this listing</p>
-              <div style={{display:"flex",gap:10}}>
-                <input placeholder="File name or description..." value={upName} onChange={e=>setUpName(e.target.value)} onKeyDown={e=>e.key==="Enter"&&upload()}/>
-                <button className="bp" onClick={upload} disabled={uploading} style={{whiteSpace:"nowrap"}}>{uploading?<Spin/>:"Upload"}</button>
-              </div>
+
+            {/* Drag & Drop Upload Zone */}
+            <div
+              onDragOver={e=>{e.preventDefault();setDragOver(true);}}
+              onDragLeave={()=>setDragOver(false)}
+              onDrop={handleDrop}
+              onClick={()=>document.getElementById("fileInput").click()}
+              style={{padding:"32px 20px",background:dragOver?t.accentDim:t.bg,borderRadius:10,border:`2px dashed ${dragOver?t.accent:t.borderLight}`,textAlign:"center",cursor:"pointer",transition:"all 0.2s"}}
+            >
+              <div style={{fontSize:32,marginBottom:10}}>☁️</div>
+              {uploading
+                ? <><div style={{fontSize:14,color:t.accent,marginBottom:4}}><Spin/> {uploadProgress}</div></>
+                : uploadProgress
+                  ? <div style={{fontSize:14,color:t.green}}>{uploadProgress}</div>
+                  : <>
+                      <div style={{fontSize:14,fontWeight:500,marginBottom:4}}>Drag & drop files here</div>
+                      <div style={{fontSize:12,color:t.textMuted}}>or click to browse — photos, PDFs, videos, anything</div>
+                    </>
+              }
+              <input id="fileInput" type="file" ref={fileInputRef} onChange={handleFileInput} style={{display:"none"}} multiple={false}/>
             </div>
           </div>
         </div>
@@ -846,6 +896,8 @@ const Admin = ({user}) => {
   const [tpl,setTpl] = useState({title:"",type:"email",category:"",preview_text:"",file_url:""});
   const [drop,setDrop] = useState({week_label:"",theme:"",median_price:"",inventory_change:"",days_on_market:"",list_to_sale:""});
   const [vid,setVid] = useState({title:"",category:"",video_url:"",duration_label:""});
+  const [course,setCourse] = useState({title:"",category:"",description:"",duration_label:"",thumbnail_emoji:"📚",total_lessons:0});
+  const [dl,setDl] = useState({title:"",type:"",format:"PDF",file_url:""});
   const [saving,setSaving] = useState(false); const [msg,setMsg] = useState("");
 
   useEffect(()=>{
@@ -881,7 +933,7 @@ const Admin = ({user}) => {
     <div className="fi">
       <div style={{marginBottom:24}}><h1 className="dd" style={{fontSize:32,marginBottom:6}}>Admin Panel</h1><p style={{color:t.textMuted}}>Manage members, content, and requests.</p></div>
       <div style={{display:"flex",gap:4,marginBottom:24,background:t.surface,borderRadius:10,padding:4,width:"fit-content",border:`1px solid ${t.border}`}}>
-        {["overview","members","templates","weekly drop","videos"].map(x=>(
+        {["overview","members","templates","weekly drop","videos","courses","downloads"].map(x=>(
           <button key={x} onClick={()=>setTab(x)} style={{padding:"8px 16px",borderRadius:7,border:"none",cursor:"pointer",fontSize:12,fontWeight:500,textTransform:"capitalize",background:tab===x?t.accent:"transparent",color:tab===x?"#0D0D0F":t.textMuted,fontFamily:"inherit",transition:"all 0.15s"}}>{x}</button>
         ))}
       </div>
@@ -900,7 +952,7 @@ const Admin = ({user}) => {
           <div className="card" style={{padding:22}}>
             <h3 style={{fontSize:15,fontWeight:600,marginBottom:14}}>Quick Actions</h3>
             <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
-              {["templates","weekly drop","videos"].map(x=><button key={x} className="bg" onClick={()=>setTab(x)} style={{textTransform:"capitalize",fontSize:13}}>+ Add {x}</button>)}
+              {["templates","weekly drop","videos","courses","downloads"].map(x=><button key={x} className="bg" onClick={()=>setTab(x)} style={{textTransform:"capitalize",fontSize:13}}>+ Add {x}</button>)}
             </div>
           </div>
         </div>
@@ -969,6 +1021,42 @@ const Admin = ({user}) => {
             <div><label>Duration</label><input value={vid.duration_label} onChange={e=>setVid(f=>({...f,duration_label:e.target.value}))} placeholder="14:20"/></div>
           </div>
           <button className="bp" onClick={()=>save(()=>sb.insert("videos",user.token,{...vid,is_published:true}),()=>setVid({title:"",category:"",video_url:"",duration_label:""}),"✓ Video published!")} disabled={saving||!vid.title}>{saving?<Spin/>:"Publish Video →"}</button>
+        </div>
+      )}
+
+      {tab==="courses"&&(
+        <div className="card" style={{padding:28}}>
+          <h3 style={{fontSize:16,fontWeight:600,marginBottom:20}}>Publish New Course</h3>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14,marginBottom:14}}>
+            <div><label>Title *</label><input value={course.title} onChange={e=>setCourse(f=>({...f,title:e.target.value}))} placeholder="Listing Strategy Framework"/></div>
+            <div><label>Category</label><input value={course.category} onChange={e=>setCourse(f=>({...f,category:e.target.value}))} placeholder="branding, listings, sales..."/></div>
+            <div><label>Total Lessons</label><input type="number" value={course.total_lessons} onChange={e=>setCourse(f=>({...f,total_lessons:parseInt(e.target.value)||0}))} placeholder="10"/></div>
+            <div><label>Duration</label><input value={course.duration_label} onChange={e=>setCourse(f=>({...f,duration_label:e.target.value}))} placeholder="2h 30m"/></div>
+            <div><label>Emoji Icon</label><input value={course.thumbnail_emoji} onChange={e=>setCourse(f=>({...f,thumbnail_emoji:e.target.value}))} placeholder="📋"/></div>
+          </div>
+          <div style={{marginBottom:18}}><label>Description</label><textarea value={course.description} onChange={e=>setCourse(f=>({...f,description:e.target.value}))} placeholder="What agents will learn in this course..."/></div>
+          <button className="bp" onClick={()=>save(()=>sb.insert("courses",user.token,{...course,is_published:true}),()=>setCourse({title:"",category:"",description:"",duration_label:"",thumbnail_emoji:"📚",total_lessons:0}),"✓ Course published!")} disabled={saving||!course.title}>{saving?<Spin/>:"Publish Course →"}</button>
+        </div>
+      )}
+
+      {tab==="downloads"&&(
+        <div className="card" style={{padding:28}}>
+          <h3 style={{fontSize:16,fontWeight:600,marginBottom:20}}>Publish New Download</h3>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14,marginBottom:14}}>
+            <div><label>Title *</label><input value={dl.title} onChange={e=>setDl(f=>({...f,title:e.target.value}))} placeholder="Open House Checklist"/></div>
+            <div><label>Type</label><input value={dl.type} onChange={e=>setDl(f=>({...f,type:e.target.value}))} placeholder="checklist, worksheet, script, SOP..."/></div>
+            <div><label>Format</label>
+              <select value={dl.format} onChange={e=>setDl(f=>({...f,format:e.target.value}))}>
+                <option value="PDF">PDF</option>
+                <option value="Google Doc">Google Doc</option>
+                <option value="Canva">Canva</option>
+                <option value="Excel">Excel</option>
+                <option value="Word">Word</option>
+              </select>
+            </div>
+            <div><label>File URL</label><input value={dl.file_url} onChange={e=>setDl(f=>({...f,file_url:e.target.value}))} placeholder="https://drive.google.com/..."/></div>
+          </div>
+          <button className="bp" onClick={()=>save(()=>sb.insert("resource_downloads",user.token,{...dl,is_published:true}),()=>setDl({title:"",type:"",format:"PDF",file_url:""}),"✓ Download published!")} disabled={saving||!dl.title}>{saving?<Spin/>:"Publish Download →"}</button>
         </div>
       )}
     </div>
