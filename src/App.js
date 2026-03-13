@@ -305,16 +305,18 @@ const Dashboard = ({user,setActive}) => {
 };
 
 // ─── WEEKLY DROP ──────────────────────────────────────────────────────────────
+const CopyBtn = ({text}) => {
+  const [copied,setCopied] = useState(false);
+  const copy = ()=>{ navigator.clipboard.writeText(text); setCopied(true); setTimeout(()=>setCopied(false),2000); };
+  return <button onClick={copy} className="bg" style={{fontSize:11,padding:"4px 10px",flexShrink:0}}>{copied?"✓ Copied":"Copy"}</button>;
+};
+
 const WeeklyDrop = ({user}) => {
-  const [drop,setDrop] = useState(null); const [ideas,setIdeas] = useState([]); const [loading,setLoading] = useState(true);
+  const [drop,setDrop] = useState(null); const [loading,setLoading] = useState(true);
   useEffect(()=>{
     (async()=>{
       const drops = await sb.query("weekly_drops",user.token,"&is_published=eq.true&order=created_at.desc&limit=1");
-      if(Array.isArray(drops)&&drops.length>0){
-        setDrop(drops[0]);
-        const di = await sb.query("content_ideas",user.token,`&weekly_drop_id=eq.${drops[0].id}`);
-        if(Array.isArray(di))setIdeas(di);
-      }
+      if(Array.isArray(drops)&&drops.length>0) setDrop(drops[0]);
       setLoading(false);
     })();
   },[user]);
@@ -322,50 +324,151 @@ const WeeklyDrop = ({user}) => {
   if(loading)return <div style={{padding:40,textAlign:"center"}}><Spin/></div>;
   if(!drop)return(
     <div className="fi">
-      <h1 className="dd" style={{fontSize:32,marginBottom:20}}>Weekly Market Drop</h1>
-      <Empty icon="📊" title="No drop published yet" sub="The Dot team will publish this week's market drop soon."/>
+      <h1 className="dd" style={{fontSize:32,marginBottom:20}}>Weekly Marketing Kit</h1>
+      <Empty icon="📦" title="This week's kit isn't ready yet" sub="Check back Monday morning — the Dot team publishes a fresh kit each week."/>
     </div>
   );
+
+  const captions = [drop.caption_1,drop.caption_2,drop.caption_3].filter(Boolean);
+
   return(
     <div className="fi">
+      {/* Header */}
       <div style={{marginBottom:28}}>
-        <span className="tag" style={{background:t.accentDim,color:t.accent,marginBottom:10,display:"inline-block"}}>New Drop</span>
-        <h1 className="dd" style={{fontSize:32,marginBottom:6}}>Weekly Market Drop</h1>
-        <p style={{color:t.textMuted}}>{drop.week_label}{drop.theme&&<> · Theme: <strong style={{color:t.text}}>{drop.theme}</strong></>}</p>
+        <span className="tag" style={{background:t.accentDim,color:t.accent,marginBottom:10,display:"inline-block"}}>📦 Weekly Kit</span>
+        <h1 className="dd" style={{fontSize:32,marginBottom:6}}>This Week's Marketing Kit</h1>
+        <p style={{color:t.textMuted}}>{drop.week_label}{drop.theme&&<> · <strong style={{color:t.text}}>{drop.theme}</strong></>}</p>
       </div>
-      {(drop.median_price||drop.inventory_change||drop.days_on_market||drop.list_to_sale)&&(
-        <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:12,marginBottom:24}}>
-          {[["Median Sale Price",drop.median_price],["Inventory Change",drop.inventory_change],["Avg Days on Market",drop.days_on_market],["List-to-Sale Ratio",drop.list_to_sale]].filter(([,v])=>v).map(([l,v])=>(
-            <div key={l} className="card" style={{padding:"18px 20px",textAlign:"center"}}>
-              <div style={{fontSize:11,color:t.textDim,textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:8}}>{l}</div>
-              <div className="dd" style={{fontSize:26,color:t.accent}}>{v}</div>
-            </div>
-          ))}
-        </div>
-      )}
-      <div className="card" style={{padding:28,marginBottom:20,border:`1px solid rgba(201,169,110,0.3)`}}>
-        <h3 style={{fontSize:18,fontWeight:600,marginBottom:6}}>This Week's Download Package</h3>
-        <p style={{color:t.textMuted,fontSize:14,marginBottom:20}}>Ready to plug into your email and social — no design work required.</p>
-        {drop.package_url
-          ?<a href={drop.package_url} target="_blank" rel="noreferrer"><button className="bp">↓ Download Full Package</button></a>
-          :<button className="bg" disabled style={{cursor:"not-allowed"}}>Package uploading soon...</button>}
-      </div>
-      {ideas.length>0&&(
-        <div className="card" style={{padding:24}}>
-          <h3 style={{fontSize:16,fontWeight:600,marginBottom:16}}>Content Ideas for This Week</h3>
-          <div style={{display:"flex",flexDirection:"column",gap:10}}>
-            {ideas.map((idea,i)=>(
-              <div key={i} style={{padding:"14px 16px",background:t.bg,borderRadius:8,border:`1px solid ${t.border}`,display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:12}}>
-                <div>
-                  <span className="tag" style={{background:t.accentDim,color:t.accent,marginBottom:6,display:"inline-block"}}>{idea.type}</span>
-                  <p style={{fontSize:14,lineHeight:1.5}}>{idea.idea}</p>
+
+      <div style={{display:"flex",flexDirection:"column",gap:16}}>
+
+        {/* MONTHLY NEWSLETTER */}
+        {drop.newsletter_url&&(
+          <div className="card" style={{padding:24,border:`1px solid rgba(201,169,110,0.25)`}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:16}}>
+              <div>
+                <div style={{display:"flex",gap:8,alignItems:"center",marginBottom:8}}>
+                  <span style={{fontSize:18}}>📰</span>
+                  <span className="tag" style={{background:"rgba(91,143,212,0.12)",color:t.blue}}>Monthly Newsletter</span>
                 </div>
-                {idea.difficulty&&<span className="tag" style={{background:idea.difficulty==="easy"?"rgba(76,175,130,0.12)":"rgba(232,200,74,0.12)",color:idea.difficulty==="easy"?t.green:t.yellow,flexShrink:0}}>{idea.difficulty}</span>}
+                <h3 style={{fontSize:17,fontWeight:600,marginBottom:6}}>{drop.newsletter_label||"This Month's Newsletter"}</h3>
+                <p style={{fontSize:13,color:t.textMuted,lineHeight:1.6}}>{drop.newsletter_notes||"Send this to your full database. Branded and ready to go."}</p>
               </div>
-            ))}
+              <a href={drop.newsletter_url} target="_blank" rel="noreferrer" style={{flexShrink:0}}>
+                <button className="bp" style={{fontSize:13}}>↓ Get Newsletter</button>
+              </a>
+            </div>
           </div>
-        </div>
-      )}
+        )}
+
+        {/* DEVELOPMENT SPOTLIGHT */}
+        {drop.dev_title&&(
+          <div className="card" style={{padding:24,border:`1px solid rgba(201,169,110,0.25)`}}>
+            <div style={{display:"flex",gap:8,alignItems:"center",marginBottom:12}}>
+              <span style={{fontSize:18}}>🏗</span>
+              <span className="tag" style={{background:"rgba(201,169,110,0.12)",color:t.accent}}>Development Spotlight</span>
+            </div>
+            <h3 style={{fontSize:17,fontWeight:600,marginBottom:6}}>{drop.dev_title}</h3>
+            {drop.dev_description&&<p style={{fontSize:13,color:t.textMuted,lineHeight:1.6,marginBottom:14}}>{drop.dev_description}</p>}
+            <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
+              {drop.dev_email_url&&<a href={drop.dev_email_url} target="_blank" rel="noreferrer"><button className="bp" style={{fontSize:13}}>↓ Send This Email</button></a>}
+              {drop.dev_brochure_url&&<a href={drop.dev_brochure_url} target="_blank" rel="noreferrer"><button className="bg" style={{fontSize:13}}>↓ Download Brochure</button></a>}
+            </div>
+          </div>
+        )}
+
+        {/* MARKET STATS */}
+        {(drop.median_price||drop.inventory_change||drop.days_on_market||drop.list_to_sale||drop.new_listings||drop.absorption_rate)&&(
+          <div className="card" style={{padding:24}}>
+            <div style={{display:"flex",gap:8,alignItems:"center",marginBottom:16}}>
+              <span style={{fontSize:18}}>📊</span>
+              <h3 style={{fontSize:16,fontWeight:600}}>Market Update</h3>
+            </div>
+            <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:10,marginBottom:14}}>
+              {[
+                ["Median Sale Price",drop.median_price],
+                ["Inventory Change",drop.inventory_change],
+                ["Days on Market",drop.days_on_market],
+                ["List-to-Sale Ratio",drop.list_to_sale],
+                ["New Listings",drop.new_listings],
+                ["Absorption Rate",drop.absorption_rate],
+              ].filter(([,v])=>v).map(([l,v])=>(
+                <div key={l} style={{padding:"14px 16px",background:t.bg,borderRadius:10,border:`1px solid ${t.border}`,textAlign:"center"}}>
+                  <div style={{fontSize:10,color:t.textDim,textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:6}}>{l}</div>
+                  <div className="dd" style={{fontSize:22,color:t.accent}}>{v}</div>
+                </div>
+              ))}
+            </div>
+            {drop.market_notes&&<p style={{fontSize:13,color:t.textMuted,lineHeight:1.6,fontStyle:"italic",padding:"12px 14px",background:t.bg,borderRadius:8,border:`1px solid ${t.border}`}}>{drop.market_notes}</p>}
+          </div>
+        )}
+
+        {/* SOCIAL TEMPLATES */}
+        {(drop.social_template_1_url||drop.social_template_2_url)&&(
+          <div className="card" style={{padding:24}}>
+            <div style={{display:"flex",gap:8,alignItems:"center",marginBottom:16}}>
+              <span style={{fontSize:18}}>📱</span>
+              <h3 style={{fontSize:16,fontWeight:600}}>This Week's Social Templates</h3>
+            </div>
+            <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
+              {drop.social_template_1_url&&(
+                <a href={drop.social_template_1_url} target="_blank" rel="noreferrer">
+                  <button className="bp" style={{fontSize:13}}>↓ {drop.social_template_1_label||"Social Template 1"}</button>
+                </a>
+              )}
+              {drop.social_template_2_url&&(
+                <a href={drop.social_template_2_url} target="_blank" rel="noreferrer">
+                  <button className="bg" style={{fontSize:13}}>↓ {drop.social_template_2_label||"Social Template 2"}</button>
+                </a>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* READY-TO-POST CAPTIONS */}
+        {captions.length>0&&(
+          <div className="card" style={{padding:24}}>
+            <div style={{display:"flex",gap:8,alignItems:"center",marginBottom:16}}>
+              <span style={{fontSize:18}}>✍️</span>
+              <h3 style={{fontSize:16,fontWeight:600}}>Ready-to-Post Captions</h3>
+            </div>
+            <div style={{display:"flex",flexDirection:"column",gap:10}}>
+              {captions.map((cap,i)=>(
+                <div key={i} style={{padding:"14px 16px",background:t.bg,borderRadius:10,border:`1px solid ${t.border}`}}>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:12}}>
+                    <p style={{fontSize:13,lineHeight:1.7,color:t.text,flex:1,whiteSpace:"pre-wrap"}}>{cap}</p>
+                    <CopyBtn text={cap}/>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* REEL IDEA */}
+        {drop.reel_idea&&(
+          <div className="card" style={{padding:24,border:`1px solid rgba(91,143,212,0.2)`}}>
+            <div style={{display:"flex",gap:8,alignItems:"center",marginBottom:12}}>
+              <span style={{fontSize:18}}>🎬</span>
+              <span className="tag" style={{background:"rgba(91,143,212,0.12)",color:t.blue}}>Reel Idea of the Week</span>
+            </div>
+            <h3 style={{fontSize:15,fontWeight:600,marginBottom:10}}>{drop.reel_title||"This Week's Reel Prompt"}</h3>
+            <div style={{padding:"16px 18px",background:t.bg,borderRadius:10,border:`1px solid ${t.border}`,marginBottom:12}}>
+              <p style={{fontSize:13,lineHeight:1.8,color:t.text,whiteSpace:"pre-wrap"}}>{drop.reel_idea}</p>
+            </div>
+            {drop.reel_hook&&(
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"12px 14px",background:"rgba(91,143,212,0.08)",borderRadius:8,border:`1px solid rgba(91,143,212,0.2)`}}>
+                <div>
+                  <div style={{fontSize:10,color:t.blue,textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:4}}>Hook Line</div>
+                  <p style={{fontSize:13,color:t.text,fontStyle:"italic"}}>"{drop.reel_hook}"</p>
+                </div>
+                <CopyBtn text={drop.reel_hook}/>
+              </div>
+            )}
+          </div>
+        )}
+
+      </div>
     </div>
   );
 };
@@ -1126,7 +1229,7 @@ const Admin = ({user}) => {
   const [users,setUsers] = useState([]); const [stats,setStats] = useState({});
   const [loading,setLoading] = useState(true);
   const [tpl,setTpl] = useState({title:"",type:"email",category:"",preview_text:"",file_url:""});
-  const [drop,setDrop] = useState({week_label:"",theme:"",median_price:"",inventory_change:"",days_on_market:"",list_to_sale:""});
+  const [drop,setDrop] = useState({week_label:"",theme:"",newsletter_label:"",newsletter_url:"",newsletter_notes:"",dev_title:"",dev_description:"",dev_email_url:"",dev_brochure_url:"",median_price:"",inventory_change:"",days_on_market:"",list_to_sale:"",new_listings:"",absorption_rate:"",market_notes:"",social_template_1_url:"",social_template_1_label:"",social_template_2_url:"",social_template_2_label:"",caption_1:"",caption_2:"",caption_3:"",reel_title:"",reel_idea:"",reel_hook:""});
   const [vid,setVid] = useState({title:"",category:"",video_url:"",duration_label:""});
   const [course,setCourse] = useState({title:"",category:"",description:"",duration_label:"",thumbnail_emoji:"📚",total_lessons:0});
   const [dl,setDl] = useState({title:"",type:"",format:"PDF",file_url:""});
@@ -1230,16 +1333,64 @@ const Admin = ({user}) => {
 
       {tab==="weekly drop"&&(
         <div className="card" style={{padding:28}}>
-          <h3 style={{fontSize:16,fontWeight:600,marginBottom:20}}>Publish Weekly Drop</h3>
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14,marginBottom:18}}>
-            <div><label>Week Label *</label><input value={drop.week_label} onChange={e=>setDrop(f=>({...f,week_label:e.target.value}))} placeholder="Week of March 18, 2025"/></div>
-            <div><label>Theme</label><input value={drop.theme} onChange={e=>setDrop(f=>({...f,theme:e.target.value}))} placeholder="Spring Market Momentum"/></div>
-            <div><label>Median Price</label><input value={drop.median_price} onChange={e=>setDrop(f=>({...f,median_price:e.target.value}))} placeholder="$649,000"/></div>
+          <h3 style={{fontSize:16,fontWeight:600,marginBottom:6}}>Publish Weekly Marketing Kit</h3>
+          <p style={{fontSize:13,color:t.textMuted,marginBottom:24}}>Fill in the sections you have this week — empty sections won't show to agents.</p>
+
+          <div style={{fontSize:12,fontWeight:700,color:t.accent,textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:12,paddingBottom:8,borderBottom:`1px solid ${t.border}`}}>Basics</div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14,marginBottom:20}}>
+            <div><label>Week Label *</label><input value={drop.week_label} onChange={e=>setDrop(f=>({...f,week_label:e.target.value}))} placeholder="Week of March 18, 2026"/></div>
+            <div><label>Theme / Focus</label><input value={drop.theme} onChange={e=>setDrop(f=>({...f,theme:e.target.value}))} placeholder="Spring Market Momentum"/></div>
+          </div>
+
+          <div style={{fontSize:12,fontWeight:700,color:t.accent,textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:12,paddingBottom:8,borderBottom:`1px solid ${t.border}`}}>📰 Monthly Newsletter</div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14,marginBottom:20}}>
+            <div><label>Newsletter Label</label><input value={drop.newsletter_label} onChange={e=>setDrop(f=>({...f,newsletter_label:e.target.value}))} placeholder="March 2026 Newsletter"/></div>
+            <div><label>Canva / Link URL</label><input value={drop.newsletter_url} onChange={e=>setDrop(f=>({...f,newsletter_url:e.target.value}))} placeholder="https://..."/></div>
+            <div style={{gridColumn:"1/-1"}}><label>Notes for agents</label><input value={drop.newsletter_notes} onChange={e=>setDrop(f=>({...f,newsletter_notes:e.target.value}))} placeholder="Send to your full database this week"/></div>
+          </div>
+
+          <div style={{fontSize:12,fontWeight:700,color:t.accent,textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:12,paddingBottom:8,borderBottom:`1px solid ${t.border}`}}>🏗 Development Spotlight</div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14,marginBottom:20}}>
+            <div><label>Development Name</label><input value={drop.dev_title} onChange={e=>setDrop(f=>({...f,dev_title:e.target.value}))} placeholder="The Guild / Copia"/></div>
+            <div><label>Email Template URL</label><input value={drop.dev_email_url} onChange={e=>setDrop(f=>({...f,dev_email_url:e.target.value}))} placeholder="https://canva.com/..."/></div>
+            <div><label>Brochure URL</label><input value={drop.dev_brochure_url} onChange={e=>setDrop(f=>({...f,dev_brochure_url:e.target.value}))} placeholder="https://..."/></div>
+            <div style={{gridColumn:"1/-1"}}><label>Description</label><textarea value={drop.dev_description} onChange={e=>setDrop(f=>({...f,dev_description:e.target.value}))} placeholder="Brief description agents can reference..."/></div>
+          </div>
+
+          <div style={{fontSize:12,fontWeight:700,color:t.accent,textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:12,paddingBottom:8,borderBottom:`1px solid ${t.border}`}}>📊 Market Stats</div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14,marginBottom:20}}>
+            <div><label>Median Sale Price</label><input value={drop.median_price} onChange={e=>setDrop(f=>({...f,median_price:e.target.value}))} placeholder="$649,000"/></div>
             <div><label>Inventory Change</label><input value={drop.inventory_change} onChange={e=>setDrop(f=>({...f,inventory_change:e.target.value}))} placeholder="↓ 12%"/></div>
             <div><label>Days on Market</label><input value={drop.days_on_market} onChange={e=>setDrop(f=>({...f,days_on_market:e.target.value}))} placeholder="21 days"/></div>
             <div><label>List-to-Sale Ratio</label><input value={drop.list_to_sale} onChange={e=>setDrop(f=>({...f,list_to_sale:e.target.value}))} placeholder="103%"/></div>
+            <div><label>New Listings</label><input value={drop.new_listings} onChange={e=>setDrop(f=>({...f,new_listings:e.target.value}))} placeholder="142"/></div>
+            <div><label>Absorption Rate</label><input value={drop.absorption_rate} onChange={e=>setDrop(f=>({...f,absorption_rate:e.target.value}))} placeholder="2.1 months"/></div>
+            <div style={{gridColumn:"1/-1"}}><label>Market Commentary (optional)</label><textarea value={drop.market_notes} onChange={e=>setDrop(f=>({...f,market_notes:e.target.value}))} placeholder="Brief note agents can reference when talking to clients..."/></div>
           </div>
-          <button className="bp" onClick={()=>save(()=>sb.insert("weekly_drops",user.token,{...drop,is_published:true}),()=>setDrop({week_label:"",theme:"",median_price:"",inventory_change:"",days_on_market:"",list_to_sale:""}),"✓ Weekly drop published!")} disabled={saving||!drop.week_label}>{saving?<Spin/>:"Publish Drop →"}</button>
+
+          <div style={{fontSize:12,fontWeight:700,color:t.accent,textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:12,paddingBottom:8,borderBottom:`1px solid ${t.border}`}}>📱 Social Templates</div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14,marginBottom:20}}>
+            <div><label>Template 1 Label</label><input value={drop.social_template_1_label} onChange={e=>setDrop(f=>({...f,social_template_1_label:e.target.value}))} placeholder="Market Update Graphic"/></div>
+            <div><label>Template 1 URL</label><input value={drop.social_template_1_url} onChange={e=>setDrop(f=>({...f,social_template_1_url:e.target.value}))} placeholder="https://canva.com/..."/></div>
+            <div><label>Template 2 Label</label><input value={drop.social_template_2_label} onChange={e=>setDrop(f=>({...f,social_template_2_label:e.target.value}))} placeholder="Development Story"/></div>
+            <div><label>Template 2 URL</label><input value={drop.social_template_2_url} onChange={e=>setDrop(f=>({...f,social_template_2_url:e.target.value}))} placeholder="https://canva.com/..."/></div>
+          </div>
+
+          <div style={{fontSize:12,fontWeight:700,color:t.accent,textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:12,paddingBottom:8,borderBottom:`1px solid ${t.border}`}}>✍️ Ready-to-Post Captions</div>
+          <div style={{display:"flex",flexDirection:"column",gap:10,marginBottom:20}}>
+            <div><label>Caption 1</label><textarea value={drop.caption_1} onChange={e=>setDrop(f=>({...f,caption_1:e.target.value}))} placeholder="The market is moving — here's what you need to know this week in Boston..."/></div>
+            <div><label>Caption 2</label><textarea value={drop.caption_2} onChange={e=>setDrop(f=>({...f,caption_2:e.target.value}))} placeholder="Thinking about buying? Here's why right now might be your window..."/></div>
+            <div><label>Caption 3</label><textarea value={drop.caption_3} onChange={e=>setDrop(f=>({...f,caption_3:e.target.value}))} placeholder="Optional third caption..."/></div>
+          </div>
+
+          <div style={{fontSize:12,fontWeight:700,color:t.accent,textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:12,paddingBottom:8,borderBottom:`1px solid ${t.border}`}}>🎬 Reel Idea of the Week</div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14,marginBottom:24}}>
+            <div><label>Reel Title</label><input value={drop.reel_title} onChange={e=>setDrop(f=>({...f,reel_title:e.target.value}))} placeholder="Why Buyers Are Back This Spring"/></div>
+            <div><label>Hook Line (copy/paste ready)</label><input value={drop.reel_hook} onChange={e=>setDrop(f=>({...f,reel_hook:e.target.value}))} placeholder="If you've been waiting to buy, watch this..."/></div>
+            <div style={{gridColumn:"1/-1"}}><label>Reel Script / Prompt</label><textarea value={drop.reel_idea} onChange={e=>setDrop(f=>({...f,reel_idea:e.target.value}))} placeholder="Film yourself walking through why spring is a strong time to buy. Cover 3 points: inventory, rates, and competition. Keep it under 60 seconds. End with a CTA to DM you."/></div>
+          </div>
+
+          <button className="bp" onClick={()=>save(()=>sb.insert("weekly_drops",user.token,{...drop,is_published:true}),()=>setDrop({week_label:"",theme:"",newsletter_label:"",newsletter_url:"",newsletter_notes:"",dev_title:"",dev_description:"",dev_email_url:"",dev_brochure_url:"",median_price:"",inventory_change:"",days_on_market:"",list_to_sale:"",new_listings:"",absorption_rate:"",market_notes:"",social_template_1_url:"",social_template_1_label:"",social_template_2_url:"",social_template_2_label:"",caption_1:"",caption_2:"",caption_3:"",reel_title:"",reel_idea:"",reel_hook:""}),"✓ Weekly kit published!")} disabled={saving||!drop.week_label}>{saving?<Spin/>:"Publish This Week's Kit →"}</button>
         </div>
       )}
 
